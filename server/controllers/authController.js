@@ -37,6 +37,8 @@ const register = async (req, res) => {
         email: user.email,
         role: user.role,
         profile: user.profile,
+        profilePicture: user.profilePicture,
+        aadhaar: user.aadhaar,
       },
     });
   } catch (err) {
@@ -71,6 +73,8 @@ const login = async (req, res) => {
         email: user.email,
         role: user.role,
         profile: user.profile,
+        profilePicture: user.profilePicture,
+        aadhaar: user.aadhaar,
       },
     });
   } catch (err) {

@@ -5,7 +5,7 @@ const Contract = require('../models/Contract');
 // @access Agribusiness
 const recordPayment = async (req, res) => {
   try {
-    const { contractId, amount, type, notes } = req.body;
+    const { contractId, amount, type, notes, paymentMode, transactionReference } = req.body;
 
     const contract = await Contract.findById(contractId);
     if (!contract) return res.status(404).json({ success: false, message: 'Contract not found.' });
@@ -23,6 +23,8 @@ const recordPayment = async (req, res) => {
       amount,
       type,
       notes,
+      paymentMode: paymentMode || 'bank_transfer',
+      transactionReference: transactionReference || '',
     });
 
     // Update amountPaid on contract and adjust paymentStatus

@@ -41,3 +41,18 @@ export const dashboardService = {
   farmer: () => api.get('/dashboard/farmer'),
   agribusiness: () => api.get('/dashboard/agribusiness'),
 };
+
+export const aadhaarService = {
+  getStatus: () => api.get('/aadhaar/status'),
+  sendOtp: (aadhaarNumber) => api.post('/aadhaar/send-otp', { aadhaarNumber }),
+  verifyOtp: (otp) => api.post('/aadhaar/verify-otp', { otp }),
+};
+
+export const uploadService = {
+  uploadProfilePicture: (formData) =>
+    api.post('/upload/profile-picture', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteProfilePicture: () => api.delete('/upload/profile-picture'),
+};
+

@@ -4,12 +4,16 @@ const cors = require('cors');
 const morgan = require('morgan');
 require('dotenv').config();
 
+const path = require('path');
+
 // Route imports
 const authRoutes = require('./routes/auth');
 const contractRoutes = require('./routes/contracts');
 const updateRoutes = require('./routes/updates');
 const ledgerRoutes = require('./routes/ledger');
 const dashboardRoutes = require('./routes/dashboard');
+const aadhaarRoutes = require('./routes/aadhaar');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
@@ -21,12 +25,17 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// ─── Static Files (profile pictures) ─────────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/updates', updateRoutes);
 app.use('/api/ledger', ledgerRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/aadhaar', aadhaarRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

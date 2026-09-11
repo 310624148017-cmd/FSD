@@ -14,6 +14,7 @@ import ContractDetailPage from './pages/ContractDetailPage';
 import CropUpdateFormPage from './pages/CropUpdateFormPage';
 import LedgerPage from './pages/LedgerPage';
 import ProfilePage from './pages/ProfilePage';
+import AadhaarVerifyPage from './pages/AadhaarVerifyPage';
 
 const App = () => {
   return (
@@ -29,6 +30,7 @@ const App = () => {
           {/* Protected — any authenticated role */}
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/verify-aadhaar" element={<ProtectedRoute><AadhaarVerifyPage /></ProtectedRoute>} />
           <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetailPage /></ProtectedRoute>} />
           <Route path="/ledger/:contractId" element={<ProtectedRoute><LedgerPage /></ProtectedRoute>} />
 

@@ -29,11 +29,21 @@ const userSchema = new mongoose.Schema(
     profile: {
       phone: { type: String, default: '' },
       location: { type: String, default: '' },
-      // Farmer-specific
       cropSpecialties: { type: [String], default: [] },
-      // Agribusiness-specific
       companyName: { type: String, default: '' },
       bio: { type: String, default: '' },
+    },
+    profilePicture: {
+      type: String,
+      default: '',
+    },
+    aadhaar: {
+      maskedNumber: { type: String, default: '' },   // "XXXX-XXXX-1234"
+      lastFour: { type: String, default: '' },
+      verified: { type: Boolean, default: false },
+      verifiedAt: { type: Date },
+      otp: { type: String, select: false },          // Hidden from queries
+      otpExpiry: { type: Date, select: false },
     },
   },
   { timestamps: true }

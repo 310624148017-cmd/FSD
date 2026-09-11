@@ -36,6 +36,16 @@ const ledgerEntrySchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    paymentMode: {
+      type: String,
+      enum: ['upi', 'bank_transfer', 'neft', 'rtgs', 'cheque', 'cash'],
+      default: 'bank_transfer',
+      required: true,
+    },
+    transactionReference: {
+      type: String,
+      default: '',  // UPI ID / UTR / Cheque No. / Reference
+    },
     transactionDate: {
       type: Date,
       default: Date.now,
