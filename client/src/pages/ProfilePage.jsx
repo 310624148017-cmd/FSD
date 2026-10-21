@@ -113,7 +113,7 @@ const ProfilePage = () => {
     }
   };
 
-  const avatarUrl = previewUrl || (user?.profilePicture ? `http://localhost:5001${user.profilePicture}` : null);
+  const avatarUrl = previewUrl || (user?.profilePicture ? `http://localhost:5005${user.profilePicture}` : null);
 
   return (
     <div className="page-container fade-in" style={{ maxWidth: 700 }}>

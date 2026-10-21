@@ -56,3 +56,7 @@ export const uploadService = {
   deleteProfilePicture: () => api.delete('/upload/profile-picture'),
 };
 
+export const paymentService = {
+  createCheckoutSession: (data) => api.post('/payment/create-checkout-session', data),
+  handleSuccess: (sessionId) => api.post('/payment/success', { session_id: sessionId }),
+};

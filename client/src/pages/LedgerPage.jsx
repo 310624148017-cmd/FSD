@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useSearchParams, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ledgerService } from '../api/services';
+import { ledgerService, paymentService } from '../api/services';
 import { StatusBadge } from '../components/StatusBadge';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -9,6 +9,7 @@ const PAYMENT_TYPES = ['advance', 'milestone', 'final', 'penalty'];
 const PAYMENT_MODES = [
   { value: 'upi', label: 'UPI', icon: '📱' },
   { value: 'bank_transfer', label: 'Bank Transfer', icon: '🏦' },
+  { value: 'stripe', label: 'Pay Online (Stripe)', icon: '💳' },
   { value: 'neft', label: 'NEFT', icon: '🔁' },
   { value: 'rtgs', label: 'RTGS', icon: '⚡' },
   { value: 'cheque', label: 'Cheque', icon: '📄' },
@@ -18,6 +19,7 @@ const PAYMENT_MODES = [
 const modeRefPlaceholder = {
   upi: 'UPI ID / Transaction ID',
   bank_transfer: 'UTR / Reference Number',
+  stripe: 'Stripe Session ID',
   neft: 'NEFT Reference Number',
   rtgs: 'RTGS UTR Number',
   cheque: 'Cheque Number',
@@ -30,6 +32,7 @@ const modeColor = ['#22c55e', '#3b82f6', '#a78bfa', '#f59e0b', '#ec4899', '#14b8
 
 const LedgerPage = () => {
   const { contractId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const isAgri = user.role === 'agribusiness';
 
@@ -52,13 +55,45 @@ const LedgerPage = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [contractId]);
+  useEffect(() => { 
+    fetchData(); 
+    
+    // Check for Stripe success
+    const payment = searchParams.get('payment');
+    const sessionId = searchParams.get('session_id');
+    if (payment === 'success' && sessionId) {
+      paymentService.handleSuccess(sessionId).then(() => {
+        setSuccess('Online payment verified successfully!');
+        fetchData();
+        searchParams.delete('payment');
+        searchParams.delete('session_id');
+        searchParams.delete('contractId');
+        searchParams.delete('amount');
+        searchParams.delete('type');
+        setSearchParams(searchParams);
+        setTimeout(() => setSuccess(''), 5000);
+      }).catch(err => {
+        setFormError('Failed to verify online payment.');
+      });
+    } else if (payment === 'cancel') {
+      setFormError('Online payment was cancelled.');
+      searchParams.delete('payment');
+      setSearchParams(searchParams);
+      setTimeout(() => setFormError(''), 5000);
+    }
+  }, [contractId]);
 
   const handleRecord = async (e) => {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
     try {
+      if (form.paymentMode === 'stripe') {
+        const res = await paymentService.createCheckoutSession({ contractId, ...form });
+        window.location.href = res.data.url;
+        return;
+      }
+      
       await ledgerService.record({ contractId, ...form });
       setSuccess('Payment recorded!');
       setForm({ amount: '', type: 'advance', notes: '', paymentMode: 'bank_transfer', transactionReference: '' });
@@ -225,6 +260,7 @@ const LedgerPage = () => {
                   onChange={(e) => setForm({ ...form, transactionReference: e.target.value })}
                   className="form-input"
                   placeholder={modeRefPlaceholder[form.paymentMode]}
+                  disabled={form.paymentMode === 'stripe'}
                 />
               </div>
               <div className="form-group">
@@ -235,7 +271,7 @@ const LedgerPage = () => {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button id="pay-submit" type="submit" className="btn-primary" disabled={submitting}>
-                {submitting ? 'Recording...' : '💳 Record Payment'}
+                {submitting ? 'Processing...' : (form.paymentMode === 'stripe' ? '💳 Pay with Stripe' : '💳 Record Payment')}
               </button>
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
             </div>

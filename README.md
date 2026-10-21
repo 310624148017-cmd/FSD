@@ -52,8 +52,8 @@ FSD/
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/YOUR_USERNAME/contract-farming.git
-cd contract-farming
+git clone https://github.com/310624148017-cmd/FSD.git
+cd FSD
 ```
 
 ### 2. Backend Setup

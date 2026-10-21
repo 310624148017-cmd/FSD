@@ -14,7 +14,7 @@ const ledgerRoutes = require('./routes/ledger');
 const dashboardRoutes = require('./routes/dashboard');
 const aadhaarRoutes = require('./routes/aadhaar');
 const uploadRoutes = require('./routes/upload');
-
+const paymentRoutes = require('./routes/payment');
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -36,6 +36,7 @@ app.use('/api/ledger', ledgerRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/aadhaar', aadhaarRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
