@@ -5,9 +5,9 @@
   "main": "api/index.js",
   "scripts": {
     "start": "node server/server.js",
-    "build": "cd client && npm install && npm run build",
-    "vercel-build": "cd client && npm install && npm run build",
-    "render-build": "npm install && cd client && npm install && npm run build",
+    "build": "cd client && npm install --include=dev && npm run build",
+    "vercel-build": "cd client && npm install --include=dev && npm run build",
+    "render-build": "npm install && cd client && npm install --include=dev && npm run build",
     "render-start": "node server/server.js",
     "client": "cd client && npm run dev",
     "server": "cd server && npm run dev"

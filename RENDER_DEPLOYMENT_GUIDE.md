@@ -45,7 +45,7 @@ If you prefer to configure it manually via the Render Dashboard:
 | **Branch** | `main` |
 | **Root Directory** | *(Leave blank or enter `.`)* |
 | **Runtime** | `Node` |
-| **Build Command** | `npm install && cd client && npm install && npm run build` |
+| **Build Command** | `npm install && cd client && npm install --include=dev && npm run build` |
 | **Start Command** | `node server/server.js` |
 | **Instance Type** | `Free` |
 
