@@ -43,10 +43,10 @@ If you prefer to configure it manually via the Render Dashboard:
 | **Name** | `contract-farming-cfms` (or your choice) |
 | **Region** | `Oregon (US West)` or `Frankfurt (EU)` |
 | **Branch** | `main` |
-| **Root Directory** | *(Leave blank)* |
+| **Root Directory** | *(Leave blank or enter `.`)* |
 | **Runtime** | `Node` |
-| **Build Command** | `npm run render-build` |
-| **Start Command** | `npm run render-start` |
+| **Build Command** | `npm install && cd client && npm install && npm run build` |
+| **Start Command** | `node server/server.js` |
 | **Instance Type** | `Free` |
 
 ### Step 3: Add Environment Variables

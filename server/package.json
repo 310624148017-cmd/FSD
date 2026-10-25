@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "build": "cd .. && npm install && cd client && npm install && npm run build",
+    "render-build": "cd .. && npm install && cd client && npm install && npm run build",
+    "render-start": "node server.js"
   },
   "keywords": [],
   "author": "",

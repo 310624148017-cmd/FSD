@@ -4,8 +4,9 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm run render-build
-    startCommand: npm run render-start
+    rootDir: .
+    buildCommand: npm install && cd client && npm install && npm run build
+    startCommand: node server/server.js
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
