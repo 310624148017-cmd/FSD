@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  timeout: 4000, // Never hang or buffer indefinitely
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -18,6 +19,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('cfm_token');
+      localStorage.removeItem('cfm_user');
       window.location.href = '/login';
     }
     return Promise.reject(err);
