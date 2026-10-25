@@ -32,6 +32,7 @@ const App = () => {
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/verify-aadhaar" element={<ProtectedRoute><AadhaarVerifyPage /></ProtectedRoute>} />
           <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetailPage /></ProtectedRoute>} />
+          <Route path="/ledger" element={<ProtectedRoute><LedgerPage /></ProtectedRoute>} />
           <Route path="/ledger/:contractId" element={<ProtectedRoute><LedgerPage /></ProtectedRoute>} />
 
           {/* Agribusiness only */}

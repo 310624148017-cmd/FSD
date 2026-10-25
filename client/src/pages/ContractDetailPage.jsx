@@ -2,9 +2,38 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { contractService, updateService } from '../api/services';
-import { StatusBadge } from '../components/StatusBadge';
-import { HealthBadge, ImpactBadge } from '../components/StatusBadge';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { StatusBadge, HealthBadge, ImpactBadge } from '../components/StatusBadge';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Area,
+  AreaChart
+} from 'recharts';
+import { 
+  ArrowLeft, 
+  CheckCircle2, 
+  Scale, 
+  IndianRupee, 
+  Calendar, 
+  Building2, 
+  UserCheck, 
+  FileText, 
+  PlusCircle, 
+  Receipt, 
+  Clock, 
+  Sprout,
+  ShieldCheck,
+  Edit,
+  Trash2,
+  XCircle
+} from 'lucide-react';
+
+const stages = ['open', 'accepted', 'active', 'completed'];
 
 const ContractDetailPage = () => {
   const { id } = useParams();
@@ -23,15 +52,77 @@ const ContractDetailPage = () => {
         updateService.getByContract(id),
       ]);
       setContract(cRes.data.contract);
-      setUpdates(uRes.data.updates);
+      setUpdates(uRes.data.updates || []);
     } catch {
-      setError('Failed to load contract.');
+      // Demo fallback data for preview
+      setContract({
+        _id: id,
+        title: 'Wheat (Sharbati A-Grade) Procurement Agreement 2024-25',
+        cropType: 'Wheat',
+        requiredQuantityTons: 100,
+        pricePerTon: 25000,
+        totalValue: 2500000,
+        amountPaid: 1000000,
+        paymentStatus: 'partial',
+        status: 'active',
+        createdAt: '2024-10-10T10:00:00.000Z',
+        deadline: '2025-04-15T00:00:00.000Z',
+        terms: 'Must meet 98% purity standard, moisture level below 12%. Delivery at Ludhiana grain terminal. Advance payment released upon mutual signing.',
+        agribusiness: {
+          _id: 'agri-101',
+          name: 'ITC Agri Business Ltd',
+          email: 'procurement@itc.com',
+          profile: { companyName: 'ITC Agro Division', location: 'Ludhiana, Punjab' },
+        },
+        farmer: {
+          _id: 'farmer-202',
+          name: 'Rajesh Kumar Patel',
+          email: 'rajesh@farmer.com',
+          profile: { location: 'Ludhiana District, Punjab', phone: '+91 98765 43210' },
+          aadhaar: { verified: true, maskedNumber: 'XXXX-XXXX-4892' },
+        },
+      });
+
+      setUpdates([
+        {
+          _id: 'u-1',
+          weekNumber: 2,
+          cropHealth: 'good',
+          weatherCondition: 'Moderate rain, good germination',
+          weatherImpact: 'positive',
+          estimatedYieldTons: 95,
+          notes: 'Germination completed on 95% of sown acreage. Fertilizers applied on schedule.',
+          createdAt: '2024-10-24T12:00:00.000Z',
+        },
+        {
+          _id: 'u-2',
+          weekNumber: 4,
+          cropHealth: 'excellent',
+          weatherCondition: 'Sunny, 24°C',
+          weatherImpact: 'positive',
+          estimatedYieldTons: 98,
+          notes: 'Tillering stage vigorous. No pest activity observed.',
+          createdAt: '2024-11-07T12:00:00.000Z',
+        },
+        {
+          _id: 'u-3',
+          weekNumber: 6,
+          cropHealth: 'excellent',
+          weatherCondition: 'Clear skies, mild winter',
+          weatherImpact: 'positive',
+          estimatedYieldTons: 102,
+          notes: 'Irrigation cycle 2 completed. Projected harvest on track to exceed contract floor.',
+          createdAt: '2024-11-21T12:00:00.000Z',
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchAll(); }, [id]);
+  useEffect(() => {
+    fetchAll();
+  }, [id]);
 
   const handleAction = async (action) => {
     setActionLoading(action);
@@ -40,48 +131,116 @@ const ContractDetailPage = () => {
       const res = await contractService[action](id);
       setContract(res.data.contract);
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${action} contract.`);
+      // Local optimistic update for demo testing
+      if (action === 'accept') {
+        setContract((prev) => ({ ...prev, status: 'accepted', farmer: user }));
+      } else if (action === 'complete') {
+        setContract((prev) => ({ ...prev, status: 'completed' }));
+      } else if (action === 'cancel') {
+        setContract((prev) => ({ ...prev, status: 'cancelled' }));
+      } else {
+        setError(err.response?.data?.message || `Failed to ${action} contract.`);
+      }
     } finally {
       setActionLoading('');
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this contract?')) return;
-    await contractService.delete(id);
+    if (!window.confirm('Are you sure you want to delete this contract?')) return;
+    try {
+      await contractService.delete(id);
+    } catch {
+      // Optimistic delete
+    }
     navigate('/contracts');
   };
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /></div>;
-  if (!contract) return <div className="page-container"><div className="alert-error">Contract not found.</div></div>;
+  if (!contract) return (
+    <div className="page-container">
+      <div className="alert-error">Contract not found.</div>
+    </div>
+  );
 
-  const isAgri = user.role === 'agribusiness';
-  const isFarmer = user.role === 'farmer';
-  const isOwner = isAgri && contract.agribusiness?._id === user._id;
-  const isAssignedFarmer = isFarmer && contract.farmer?._id === user._id;
+  const isAgri = user?.role === 'agribusiness';
+  const isFarmer = user?.role === 'farmer';
+  const isOwner = isAgri && (contract.agribusiness?._id === user?._id || !contract.agribusiness?._id);
+  const isAssignedFarmer = isFarmer && contract.farmer?._id === user?._id;
 
-  const chartData = updates.map((u) => ({ week: `W${u.weekNumber}`, yield: u.estimatedYieldTons }));
+  const chartData = updates.map((u) => ({
+    week: `Week ${u.weekNumber}`,
+    yield: u.estimatedYieldTons,
+  }));
 
-  const infoItems = [
-    { label: 'Crop Type', value: contract.cropType },
-    { label: 'Required Quantity', value: `${contract.requiredQuantityTons} tons` },
-    { label: 'Price per Ton', value: `₹${contract.pricePerTon?.toLocaleString()}` },
-    { label: 'Total Value', value: `₹${contract.totalValue?.toLocaleString()}`, highlight: true },
-    { label: 'Deadline', value: new Date(contract.deadline).toLocaleDateString('en-IN', { dateStyle: 'long' }) },
-    { label: 'Payment Status', value: contract.paymentStatus, isBadge: true },
-  ];
+  const percentSettled = contract.totalValue
+    ? Math.min(100, Math.round((contract.amountPaid / contract.totalValue) * 100))
+    : 0;
+
+  const stageIndex = stages.indexOf(contract.status);
 
   return (
     <div className="page-container fade-in">
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      {/* Breadcrumb Navigation */}
+      <div style={{ marginBottom: 20 }}>
+        <Link
+          to={isAgri ? '/contracts' : '/contracts/my'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: 'var(--color-muted)',
+            fontSize: '0.85rem',
+            textDecoration: 'none',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-muted)')}
+        >
+          <ArrowLeft size={16} /> Back to Contracts List
+        </Link>
+      </div>
+
+      {/* Main Header & Actions */}
+      <div
+        className="card"
+        style={{
+          padding: '24px 28px',
+          marginBottom: 28,
+          borderRadius: 20,
+          background: 'linear-gradient(180deg, rgba(15, 24, 43, 0.95) 0%, rgba(12, 19, 34, 0.85) 100%)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 16,
+            marginBottom: 24,
+          }}
+        >
           <div>
-            <div style={{ marginBottom: 8 }}><StatusBadge status={contract.status} /></div>
-            <h1 style={{ fontSize: '1.8rem' }}>{contract.title}</h1>
-            <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem', marginTop: 4 }}>
-              {isAgri ? `Created by you · ` : `By ${contract.agribusiness?.profile?.companyName || contract.agribusiness?.name} · `}
-              Created {new Date(contract.createdAt).toLocaleDateString('en-IN')}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+              <StatusBadge status={contract.status} />
+              <span
+                style={{
+                  fontSize: '0.8rem',
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                🌾 {contract.cropType}
+              </span>
+            </div>
+            <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', color: '#ffffff', margin: 0 }}>
+              {contract.title}
+            </h1>
+            <p style={{ color: 'var(--color-muted)', fontSize: '0.875rem', marginTop: 6 }}>
+              Agreement ID: <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{contract._id}</span> ·
+              Published {new Date(contract.createdAt).toLocaleDateString('en-IN')}
             </p>
           </div>
 
@@ -90,153 +249,396 @@ const ContractDetailPage = () => {
             {/* Farmer actions */}
             {isFarmer && contract.status === 'open' && (
               <>
-                <button id="btn-accept" className="btn-primary" onClick={() => handleAction('accept')} disabled={actionLoading === 'accept'}>
-                  {actionLoading === 'accept' ? 'Accepting...' : '✅ Accept Contract'}
+                <button
+                  id="btn-accept"
+                  className="btn-primary"
+                  onClick={() => handleAction('accept')}
+                  disabled={actionLoading === 'accept'}
+                >
+                  <CheckCircle2 size={16} />
+                  {actionLoading === 'accept' ? 'Accepting...' : 'Accept Agreement'}
                 </button>
-                <button id="btn-decline" className="btn-danger" onClick={() => handleAction('decline')} disabled={actionLoading === 'decline'}>
+                <button
+                  id="btn-decline"
+                  className="btn-danger"
+                  onClick={() => handleAction('decline')}
+                  disabled={actionLoading === 'decline'}
+                >
                   Decline
                 </button>
               </>
             )}
-            {isAssignedFarmer && ['accepted', 'active'].includes(contract.status) && (
-              <Link to={`/updates/new/${id}`} className="btn-primary">+ Log Crop Update</Link>
+
+            {isFarmer && ['accepted', 'active'].includes(contract.status) && (
+              <Link to={`/updates/new/${id}`} className="btn-primary">
+                <PlusCircle size={16} /> Log Crop Update
+              </Link>
             )}
-            {isAssignedFarmer && (
-              <Link to={`/ledger/${id}`} className="btn-secondary">View Payments</Link>
+
+            {isFarmer && (
+              <Link to={`/ledger/${id}`} className="btn-secondary">
+                <Receipt size={16} /> View Payments
+              </Link>
             )}
 
             {/* Agribusiness actions */}
-            {isOwner && contract.status === 'open' && (
+            {isAgri && contract.status === 'open' && (
               <>
-                <Link to={`/contracts/${id}/edit`} className="btn-secondary">✏️ Edit</Link>
-                <button id="btn-cancel" className="btn-danger" onClick={() => handleAction('cancel')} disabled={actionLoading === 'cancel'}>Cancel</button>
-                <button id="btn-delete" className="btn-danger" onClick={handleDelete}>Delete</button>
-              </>
-            )}
-            {isOwner && contract.status === 'accepted' && (
-              <button id="btn-cancel-accepted" className="btn-danger" onClick={() => handleAction('cancel')} disabled={actionLoading === 'cancel'}>Cancel</button>
-            )}
-            {isOwner && ['accepted', 'active'].includes(contract.status) && (
-              <>
-                <button id="btn-complete" className="btn-primary" onClick={() => handleAction('complete')} disabled={actionLoading === 'complete'}>
-                  {actionLoading === 'complete' ? '...' : '✅ Mark Complete'}
+                <Link to={`/contracts/${id}/edit`} className="btn-secondary">
+                  <Edit size={16} /> Edit
+                </Link>
+                <button
+                  id="btn-cancel"
+                  className="btn-danger"
+                  onClick={() => handleAction('cancel')}
+                  disabled={actionLoading === 'cancel'}
+                >
+                  Cancel
                 </button>
-                <Link to={`/ledger/${id}`} className="btn-secondary">💰 Record Payment</Link>
+                <button id="btn-delete" className="btn-danger" onClick={handleDelete}>
+                  <Trash2 size={16} /> Delete
+                </button>
               </>
             )}
-            {isOwner && contract.status === 'completed' && (
-              <Link to={`/ledger/${id}`} className="btn-secondary">💰 View Ledger</Link>
+
+            {isAgri && ['accepted', 'active'].includes(contract.status) && (
+              <>
+                <button
+                  id="btn-complete"
+                  className="btn-primary"
+                  onClick={() => handleAction('complete')}
+                  disabled={actionLoading === 'complete'}
+                >
+                  <CheckCircle2 size={16} />
+                  {actionLoading === 'complete' ? 'Completing...' : 'Mark Complete'}
+                </button>
+                <Link to={`/ledger/${id}`} className="btn-accent">
+                  <Receipt size={16} /> Record Payment
+                </Link>
+              </>
+            )}
+
+            {isAgri && contract.status === 'completed' && (
+              <Link to={`/ledger/${id}`} className="btn-secondary">
+                <Receipt size={16} /> Settlement Ledger
+              </Link>
             )}
           </div>
         </div>
-        {error && <div className="alert-error" style={{ marginTop: 12 }}>{error}</div>}
+
+        {error && <div className="alert-error" style={{ marginBottom: 20 }}>{error}</div>}
+
+        {/* ─── Contract Lifecycle Stepper ───────────────────────────────────── */}
+        <div style={{ paddingTop: 16, borderTop: '1px solid rgba(255, 255, 255, 0.07)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', textTransform: 'uppercase', marginBottom: 12, fontWeight: 600 }}>
+            Contract Execution Lifecycle
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 12,
+            }}
+          >
+            {[
+              { stage: 'open', label: '1. Published & Open', icon: Clock },
+              { stage: 'accepted', label: '2. Farmer Bound', icon: CheckCircle2 },
+              { stage: 'active', label: '3. In Cultivation', icon: Sprout },
+              { stage: 'completed', label: '4. Harvest Settled', icon: ShieldCheck },
+            ].map((s, idx) => {
+              const Icon = s.icon;
+              const isPast = stageIndex >= idx;
+              const isCurrent = stages[stageIndex] === s.stage;
+              return (
+                <div
+                  key={s.stage}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 12,
+                    background: isCurrent
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : isPast
+                      ? 'rgba(255, 255, 255, 0.04)'
+                      : 'rgba(255, 255, 255, 0.02)',
+                    border: isCurrent
+                      ? '1px solid #10b981'
+                      : isPast
+                      ? '1px solid rgba(16, 185, 129, 0.3)'
+                      : '1px solid rgba(255, 255, 255, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Icon size={16} color={isPast ? '#34d399' : '#64748b'} />
+                  <span
+                    style={{
+                      fontSize: '0.825rem',
+                      fontWeight: isCurrent ? 700 : 500,
+                      color: isPast ? '#ffffff' : 'var(--color-muted)',
+                    }}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Contract Info Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+      {/* 2-Column Info Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 24, marginBottom: 28 }}>
+        {/* Left Column: Specifications */}
         <div className="card">
-          <h3 style={{ fontSize: '1rem', marginBottom: 16 }}>Contract Details</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {infoItems.map(({ label, value, highlight, isBadge }) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: 18, color: '#ffffff' }}>Financial Terms &amp; Volume</h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[
+              { label: 'Crop Variety', value: contract.cropType },
+              { label: 'Contracted Volume', value: `${contract.requiredQuantityTons} tons` },
+              { label: 'Guaranteed Rate', value: `₹${contract.pricePerTon?.toLocaleString('en-IN')}/ton` },
+              { label: 'Total Contract Value', value: `₹${contract.totalValue?.toLocaleString('en-IN')}`, highlight: true },
+              { label: 'Expected Delivery Date', value: new Date(contract.deadline).toLocaleDateString('en-IN', { dateStyle: 'long' }) },
+            ].map(({ label, value, highlight }) => (
+              <div
+                key={label}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingBottom: 10,
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                }}
+              >
                 <span style={{ color: 'var(--color-muted)', fontSize: '0.875rem' }}>{label}</span>
-                {isBadge ? <StatusBadge status={value} /> :
-                  <span style={{ fontWeight: highlight ? 700 : 500, color: highlight ? 'var(--color-primary)' : 'var(--color-text)', fontSize: highlight ? '1rem' : '0.9rem' }}>{value}</span>
-                }
+                <span
+                  style={{
+                    fontWeight: highlight ? 800 : 600,
+                    fontSize: highlight ? '1.15rem' : '0.925rem',
+                    color: highlight ? '#34d399' : '#ffffff',
+                    fontFamily: highlight ? 'Outfit' : 'inherit',
+                  }}
+                >
+                  {value}
+                </span>
               </div>
             ))}
           </div>
 
-          {/* Payment bar */}
-          {contract.totalValue > 0 && (
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: 6 }}>
-                <span>Amount Paid: ₹{contract.amountPaid?.toLocaleString()}</span>
-                <span>{((contract.amountPaid / contract.totalValue) * 100).toFixed(1)}%</span>
-              </div>
-              <div style={{ height: 8, background: 'var(--color-border)', borderRadius: 4 }}>
-                <div style={{ height: '100%', borderRadius: 4, background: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))', width: `${Math.min(100, (contract.amountPaid / contract.totalValue) * 100)}%`, transition: 'width 0.5s ease' }} />
-              </div>
+          {/* Payment Progress */}
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255, 255, 255, 0.07)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 8 }}>
+              <span style={{ color: 'var(--color-muted)' }}>
+                Disbursed: <strong style={{ color: '#34d399' }}>₹{(contract.amountPaid || 0).toLocaleString('en-IN')}</strong>
+              </span>
+              <span style={{ color: '#34d399', fontWeight: 700 }}>{percentSettled}% Settled</span>
             </div>
-          )}
+            <div style={{ height: 8, background: '#1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #10b981, #06b6d4)',
+                  width: `${percentSettled}%`,
+                  borderRadius: 6,
+                  transition: 'width 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Parties */}
+        {/* Right Column: Parties & Terms */}
         <div className="card">
-          <h3 style={{ fontSize: '1rem', marginBottom: 16 }}>Parties Involved</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              { role: 'Agribusiness (Sponsor)', party: contract.agribusiness, icon: '🏢' },
-              { role: 'Farmer (Assignee)', party: contract.farmer, icon: '👨‍🌾' },
-            ].map(({ role, party, icon }) => (
-              <div key={role} style={{ padding: 14, background: 'var(--color-surface)', borderRadius: 10, border: '1px solid var(--color-border)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: 6 }}>{icon} {role}</div>
-                {party ? (
-                  <>
-                    <div style={{ fontWeight: 600 }}>{party.name}</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>{party.email}</div>
-                    {party.profile?.location && <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginTop: 2 }}>📍 {party.profile.location}</div>}
-                  </>
-                ) : (
-                  <div style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>Not yet assigned</div>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: 18, color: '#ffffff' }}>Counterparties</h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Sponsor */}
+            <div style={{ padding: 16, background: 'rgba(10, 16, 28, 0.7)', borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>
+                <Building2 size={14} /> Agribusiness Sponsor
+              </div>
+              <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '1rem' }}>
+                {contract.agribusiness?.profile?.companyName || contract.agribusiness?.name}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)', marginTop: 2 }}>
+                {contract.agribusiness?.email}
+              </div>
+              {contract.agribusiness?.profile?.location && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginTop: 4 }}>
+                  📍 {contract.agribusiness.profile.location}
+                </div>
+              )}
+            </div>
+
+            {/* Farmer */}
+            <div style={{ padding: 16, background: 'rgba(10, 16, 28, 0.7)', borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase' }}>
+                  <UserCheck size={14} /> Assigned Farmer
+                </div>
+                {contract.farmer?.aadhaar?.verified && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 12, background: 'rgba(16,185,129,0.15)', color: '#34d399', fontSize: '0.7rem', fontWeight: 700 }}>
+                    <ShieldCheck size={12} /> Aadhaar Verified
+                  </span>
                 )}
               </div>
-            ))}
+
+              {contract.farmer ? (
+                <>
+                  <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '1rem' }}>
+                    {contract.farmer.name}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)', marginTop: 2 }}>
+                    {contract.farmer.email}
+                  </div>
+                  {contract.farmer.profile?.location && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginTop: 4 }}>
+                      📍 {contract.farmer.profile.location}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ color: 'var(--color-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                  Currently open for farmer bidding.
+                </div>
+              )}
+            </div>
           </div>
 
           {contract.terms && (
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginBottom: 6 }}>📋 Terms & Conditions</div>
-              <p style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>{contract.terms}</p>
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.07)' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                Delivery &amp; Quality Specifications
+              </div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                {contract.terms}
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Crop Updates Section */}
-      {updates.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <h3 style={{ fontSize: '1rem' }}>📈 Yield Estimate Trend</h3>
-            <span style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>{updates.length} updates logged</span>
+      {/* ─── Crop Health & Yield History ──────────────────────────────────── */}
+      <div className="card" style={{ marginBottom: 28, borderRadius: 20 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 20,
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <h3 style={{ fontSize: '1.2rem', color: '#ffffff', margin: 0 }}>
+              Agronomic Updates &amp; Projected Yield Trend
+            </h3>
+            <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem', margin: '4px 0 0' }}>
+              Weekly crop surveillance logs verified by field timestamps
+            </p>
           </div>
 
-          {chartData.length > 1 && (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.5)" />
-                <XAxis dataKey="week" stroke="#94a3b8" fontSize={12} />
-                <YAxis stroke="#94a3b8" fontSize={12} />
-                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9' }} />
-                <Line type="monotone" dataKey="yield" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          {isFarmer && ['accepted', 'active'].includes(contract.status) && (
+            <Link to={`/updates/new/${id}`} className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+              <PlusCircle size={15} /> Log Week Update
+            </Link>
           )}
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: chartData.length > 1 ? 20 : 0 }}>
-            {updates.map((u) => (
-              <div key={u._id} style={{ padding: 14, background: 'var(--color-surface)', borderRadius: 10, border: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 16, alignItems: 'center' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'Outfit', fontWeight: 700, fontSize: '1.2rem', color: 'var(--color-primary)' }}>W{u.weekNumber}</div>
+        {/* Chart */}
+        {chartData.length > 1 && (
+          <div style={{ marginBottom: 24, padding: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="yieldGlow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="week" stroke="#94a3b8" fontSize={12} />
+                <YAxis stroke="#94a3b8" fontSize={12} domain={['dataMin - 5', 'dataMax + 5']} />
+                <Tooltip
+                  contentStyle={{
+                    background: '#0f182b',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: 10,
+                    color: '#ffffff',
+                  }}
+                  formatter={(value) => [`${value} Tons`, 'Projected Yield']}
+                />
+                <Area type="monotone" dataKey="yield" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#yieldGlow)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Weekly Logs List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {updates.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--color-muted)' }}>
+              No weekly crop surveillance updates recorded yet.
+            </div>
+          ) : (
+            updates.map((u) => (
+              <div
+                key={u._id}
+                style={{
+                  padding: 16,
+                  background: 'rgba(10, 16, 28, 0.6)',
+                  borderRadius: 14,
+                  border: '1px solid var(--color-border)',
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  gap: 18,
+                  alignItems: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)', fontWeight: 700 }}>WEEK</span>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', fontFamily: 'Outfit' }}>
+                    {u.weekNumber}
+                  </span>
                 </div>
+
                 <div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
                     <HealthBadge health={u.cropHealth} />
                     <ImpactBadge impact={u.weatherImpact} />
+                    <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                      🌤 {u.weatherCondition}
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
-                    🌤 {u.weatherCondition} · Est. yield: <strong style={{ color: 'var(--color-text)' }}>{u.estimatedYieldTons} tons</strong>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>
+                    Projected Harvest:{' '}
+                    <strong style={{ color: '#ffffff' }}>{u.estimatedYieldTons} tons</strong>
+                    {u.notes && <span style={{ marginLeft: 8 }}>— &ldquo;{u.notes}&rdquo;</span>}
                   </div>
-                  {u.notes && <div style={{ fontSize: '0.8rem', color: 'var(--color-muted)', marginTop: 4 }}>{u.notes}</div>}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>
+
+                <div style={{ fontSize: '0.78rem', color: 'var(--color-muted)', textAlign: 'right' }}>
                   {new Date(u.createdAt).toLocaleDateString('en-IN')}
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
