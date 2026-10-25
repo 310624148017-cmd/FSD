@@ -4,6 +4,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 require('dotenv').config();
 
 // CRITICAL FIX: Disable Mongoose command buffering so queries NEVER hang or timeout when DB is connecting
@@ -66,7 +67,8 @@ app.use(
       if (
         allowedOrigins.length === 0 ||
         allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app')
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com')
       ) {
         return callback(null, true);
       }
@@ -645,13 +647,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ─── Root Route ──────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
-  res.json({
-    message: 'AgriContract API is running',
-    docs: '/api/health',
+// ─── Serve Built Frontend in Production (Render / Unified Node Host) ───────────
+const clientDistPath = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    // Only intercept HTML navigation, do not intercept API or upload calls
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
   });
-});
+} else {
+  // ─── Root Route ──────────────────────────────────────────────────────────────
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'AgriContract API is running',
+      docs: '/api/health',
+    });
+  });
+}
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

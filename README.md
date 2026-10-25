@@ -2,6 +2,12 @@
 
 A full-stack **MERN** application that acts as a digital bridge between **Agribusinesses (Sponsors)** and **Farmers**, facilitating digital agreements, crop lifecycle tracking, and financial transparency.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/310624148017-cmd/FSD)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed_on-Vercel-black?logo=vercel)](https://contract-farming-lac.vercel.app)
+
+- **Live Vercel Production:** [https://contract-farming-lac.vercel.app](https://contract-farming-lac.vercel.app)
+- **1-Click Deploy to Render:** [Deploy on Render](https://render.com/deploy?repo=https://github.com/310624148017-cmd/FSD) (See [RENDER_DEPLOYMENT_GUIDE.md](./RENDER_DEPLOYMENT_GUIDE.md))
+
 ---
 
 ## 🚀 Tech Stack
