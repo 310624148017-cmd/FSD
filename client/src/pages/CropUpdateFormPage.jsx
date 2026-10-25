@@ -46,14 +46,33 @@ const CropUpdateFormPage = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const newUpdate = {
+      _id: 'up-' + Date.now(),
+      contractId,
+      weekNumber: parseInt(form.weekNumber) || 1,
+      cropHealth: form.cropHealth,
+      estimatedYieldTons: parseFloat(form.estimatedYieldTons) || 0,
+      weatherCondition: form.weatherCondition,
+      weatherImpact: form.weatherImpact,
+      notes: form.notes,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save immediately to local storage so manual updates are never lost
+    try {
+      const locals = JSON.parse(localStorage.getItem('cfm_local_updates') || '[]');
+      locals.unshift(newUpdate);
+      localStorage.setItem('cfm_local_updates', JSON.stringify(locals));
+    } catch {}
+
     try {
       await updateService.create({ ...form, contractId });
-      navigate(`/contracts/${contractId}`);
     } catch (err) {
-      // Local optimistic redirect
-      navigate(`/contracts/${contractId}`);
+      // Offline fallback handled by local storage
     } finally {
       setLoading(false);
+      navigate(`/contracts/${contractId}`);
     }
   };
 

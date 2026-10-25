@@ -88,7 +88,7 @@ const uploadsPath = process.env.VERCEL
   : path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsPath));
 
-// ─── Sample Data for Instant Response When MongoDB is Disconnected ───────────
+// ─── State Store for Dynamic Manual Data Persistence (when MongoDB is offline) ───
 const demoAgriUser = {
   _id: 'demo-agri-id-202',
   name: 'ITC Agri Ltd (Demo)',
@@ -117,9 +117,11 @@ const demoFarmerUser = {
   },
 };
 
-const demoContracts = [
+let storeUsers = [demoAgriUser, demoFarmerUser];
+
+let storeContracts = [
   {
-    _id: 'demo-c1',
+    _id: 'c-101',
     title: 'Wheat (Sharbati A-Grade) 2024-25',
     cropType: 'Wheat',
     requiredQuantityTons: 100,
@@ -135,7 +137,7 @@ const demoContracts = [
     terms: 'Moisture < 12%. Delivery at Ludhiana terminal. 20% advance upon signing.',
   },
   {
-    _id: 'demo-c2',
+    _id: 'c-102',
     title: 'Basmati Rice Export Standard',
     cropType: 'Basmati Rice',
     requiredQuantityTons: 80,
@@ -151,7 +153,7 @@ const demoContracts = [
     terms: 'Export quality long grain specification.',
   },
   {
-    _id: 'demo-c3',
+    _id: 'c-103',
     title: 'Organic Cotton Kharif Season',
     cropType: 'Cotton',
     requiredQuantityTons: 40,
@@ -167,7 +169,7 @@ const demoContracts = [
     terms: 'Organic certification required.',
   },
   {
-    _id: 'demo-c4',
+    _id: 'c-104',
     title: 'Mustard Seeds Winter Harvest',
     cropType: 'Mustard',
     requiredQuantityTons: 50,
@@ -184,14 +186,96 @@ const demoContracts = [
   },
 ];
 
-// ─── Instant Fallback Middleware when MongoDB is Offline ──────────────────────
-// This prevents Mongoose from buffering queries and timing out with 504 on Vercel
+let storeUpdates = [
+  {
+    _id: 'u-1',
+    contractId: 'c-101',
+    weekNumber: 2,
+    cropHealth: 'good',
+    weatherCondition: 'Moderate rain, good germination',
+    weatherImpact: 'positive',
+    estimatedYieldTons: 95,
+    notes: 'Germination on 95% of sown acreage. Fertilizers applied.',
+    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+  },
+  {
+    _id: 'u-2',
+    contractId: 'c-101',
+    weekNumber: 4,
+    cropHealth: 'excellent',
+    weatherCondition: 'Sunny, 24°C',
+    weatherImpact: 'positive',
+    estimatedYieldTons: 98,
+    notes: 'Tillering stage vigorous. No pest activity.',
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+  },
+  {
+    _id: 'u-3',
+    contractId: 'c-101',
+    weekNumber: 6,
+    cropHealth: 'excellent',
+    weatherCondition: 'Clear skies, mild winter',
+    weatherImpact: 'positive',
+    estimatedYieldTons: 102,
+    notes: 'Irrigation cycle 2 completed. Projected harvest on track.',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+let storeLedger = [
+  {
+    _id: 'led-1',
+    contractId: 'c-101',
+    contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
+    amount: 500000,
+    type: 'advance',
+    paymentMode: 'bank_transfer',
+    transactionReference: 'NEFT-AXIS-9823412',
+    notes: 'Contract signing advance 20%',
+    status: 'verified',
+    createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+  },
+  {
+    _id: 'led-2',
+    contractId: 'c-101',
+    contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
+    amount: 500000,
+    type: 'milestone',
+    paymentMode: 'upi',
+    transactionReference: 'UPI-RAZOR-4819283',
+    notes: 'Milestone 2: Tillering and fertilizer audit passed',
+    status: 'verified',
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    _id: 'led-3',
+    contractId: 'c-102',
+    contract: { title: 'Basmati Rice Export Standard' },
+    amount: 450000,
+    type: 'advance',
+    paymentMode: 'stripe',
+    transactionReference: 'STRIPE-CH-918231',
+    notes: 'Seed procurement advance',
+    status: 'verified',
+    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+];
+
+// Helper to find current user from Authorization token header
+const getUserFromHeader = (req) => {
+  const auth = req.headers.authorization || '';
+  if (auth.includes('farmer')) return demoFarmerUser;
+  return demoAgriUser;
+};
+
+// ─── Stateful Fallback Middleware: Enables Full Manual Data Input ────────────
 app.use((req, res, next) => {
   if (mongoose.connection.readyState === 1) {
     return next(); // Live database connected!
   }
 
   const { path: reqPath, method } = req;
+  const currentUser = getUserFromHeader(req);
 
   // Health check
   if (reqPath === '/api/health') {
@@ -203,28 +287,31 @@ app.use((req, res, next) => {
     });
   }
 
-  // Auth me
+  // ─── AUTHENTICATION ────────────────────────────────────────────────────────
   if (reqPath === '/api/auth/me' && method === 'GET') {
-    const authHeader = req.headers.authorization || '';
-    const isFarmer = authHeader.includes('farmer');
-    return res.json({
-      success: true,
-      user: isFarmer ? demoFarmerUser : demoAgriUser,
-    });
+    return res.json({ success: true, user: currentUser });
   }
 
-  // Auth login
+  if (reqPath === '/api/auth/me' && method === 'PUT') {
+    const { name, profile } = req.body || {};
+    if (name) currentUser.name = name;
+    if (profile) currentUser.profile = { ...currentUser.profile, ...profile };
+    return res.json({ success: true, user: currentUser });
+  }
+
   if (reqPath === '/api/auth/login' && method === 'POST') {
     const { email } = req.body || {};
-    const isFarmer = (email && email.toLowerCase().includes('farmer'));
+    const existing = storeUsers.find(
+      (u) => u.email.toLowerCase() === (email || '').toLowerCase()
+    );
+    const userToReturn = existing || (email && email.toLowerCase().includes('farmer') ? demoFarmerUser : demoAgriUser);
     return res.json({
       success: true,
-      token: 'demo-token-' + (isFarmer ? 'farmer' : 'agri') + '-' + Date.now(),
-      user: isFarmer ? demoFarmerUser : demoAgriUser,
+      token: 'demo-token-' + userToReturn.role + '-' + Date.now(),
+      user: userToReturn,
     });
   }
 
-  // Auth register
   if (reqPath === '/api/auth/register' && method === 'POST') {
     const { name, email, role } = req.body || {};
     const newUser = {
@@ -235,206 +322,303 @@ app.use((req, res, next) => {
       aadhaar: { verified: false },
       profile: {},
     };
+    storeUsers.push(newUser);
     return res.status(201).json({
       success: true,
-      token: 'demo-token-' + Date.now(),
+      token: 'demo-token-' + newUser.role + '-' + Date.now(),
       user: newUser,
     });
   }
 
-  // Dashboard agribusiness
+  // ─── DASHBOARDS ────────────────────────────────────────────────────────────
   if (reqPath === '/api/dashboard/agribusiness' && method === 'GET') {
+    const totalPaid = storeLedger.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const totalContracts = storeContracts.length;
+    const activeContracts = storeContracts.filter((c) => c.status === 'active').length;
+    const completedContracts = storeContracts.filter((c) => c.status === 'completed').length;
+    const openContracts = storeContracts.filter((c) => c.status === 'open').length;
+
     return res.json({
       success: true,
       dashboard: {
         stats: {
-          totalContracts: 6,
-          activeContracts: 3,
-          completedContracts: 2,
-          openContracts: 1,
+          totalContracts,
+          activeContracts,
+          completedContracts,
+          openContracts,
           farmerCount: 4,
-          totalPaid: 1450000,
+          totalPaid,
         },
-        recentContracts: demoContracts,
+        recentContracts: storeContracts,
       },
     });
   }
 
-  // Dashboard farmer
   if (reqPath === '/api/dashboard/farmer' && method === 'GET') {
     return res.json({
       success: true,
       dashboard: {
         stats: {
-          totalContracts: 4,
-          activeContracts: 2,
-          completedContracts: 1,
-          openContracts: 8,
+          totalContracts: storeContracts.filter((c) => c.farmer).length,
+          activeContracts: storeContracts.filter((c) => c.status === 'active').length,
+          completedContracts: storeContracts.filter((c) => c.status === 'completed').length,
+          openContracts: storeContracts.filter((c) => c.status === 'open').length,
         },
-        recentUpdates: [
-          {
-            _id: 'demo-u1',
-            contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
-            weekNumber: 6,
-            cropHealth: 'excellent',
-            weatherCondition: 'Mild Sunny, Optimal Moisture',
-            estimatedYieldTons: 98,
-          },
-        ],
-        pendingPayments: demoContracts.slice(0, 2),
+        recentUpdates: storeUpdates.slice(0, 5).map((u) => ({
+          ...u,
+          contract: storeContracts.find((c) => c._id === u.contractId) || { title: 'Contract' },
+        })),
+        pendingPayments: storeContracts.slice(0, 2),
       },
     });
   }
 
-  // Contracts list
+  // ─── CONTRACTS CRUD (Add manual data, view, edit, update status) ───────────
   if (reqPath === '/api/contracts' && method === 'GET') {
-    return res.json({ success: true, contracts: demoContracts });
+    const statusQuery = req.query?.status;
+    const list = statusQuery
+      ? storeContracts.filter((c) => c.status === statusQuery)
+      : storeContracts;
+    return res.json({ success: true, contracts: list });
   }
+
   if (reqPath === '/api/contracts/open' && method === 'GET') {
     return res.json({
       success: true,
-      contracts: demoContracts.filter((c) => c.status === 'open'),
+      contracts: storeContracts.filter((c) => c.status === 'open'),
     });
   }
+
   if (reqPath === '/api/contracts/my' && method === 'GET') {
-    return res.json({ success: true, contracts: demoContracts.slice(0, 2) });
+    const statusQuery = req.query?.status;
+    let list = storeContracts.filter((c) => Boolean(c.farmer));
+    if (statusQuery) list = list.filter((c) => c.status === statusQuery);
+    return res.json({ success: true, contracts: list });
   }
 
-  // Single contract
+  // CREATE NEW CONTRACT (Manual input)
+  if (reqPath === '/api/contracts' && method === 'POST') {
+    const { title, cropType, requiredQuantityTons, pricePerTon, deadline, terms } = req.body || {};
+    const qty = parseFloat(requiredQuantityTons) || 1;
+    const price = parseFloat(pricePerTon) || 1;
+    const newContract = {
+      _id: 'c-' + Date.now(),
+      title: title || 'Custom Agricultural Agreement',
+      cropType: cropType || 'Crop',
+      requiredQuantityTons: qty,
+      pricePerTon: price,
+      totalValue: qty * price,
+      amountPaid: 0,
+      paymentStatus: 'pending',
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      deadline: deadline || new Date(Date.now() + 90 * 86400000).toISOString(),
+      terms: terms || 'Standard procurement specifications and SLA delivery terms.',
+      farmer: null,
+      agribusiness: currentUser,
+    };
+    storeContracts.unshift(newContract);
+    return res.status(201).json({ success: true, contract: newContract });
+  }
+
+  // GET SINGLE CONTRACT
   if (reqPath.startsWith('/api/contracts/') && method === 'GET') {
     const id = reqPath.split('/')[3];
-    const found = demoContracts.find((c) => c._id === id) || demoContracts[0];
-    return res.json({ success: true, contract: found });
+    const contract = storeContracts.find((c) => c._id === id) || storeContracts[0];
+    return res.json({ success: true, contract });
   }
 
-  // Crop updates
+  // UPDATE CONTRACT
+  if (reqPath.startsWith('/api/contracts/') && method === 'PUT') {
+    const id = reqPath.split('/')[3];
+    const contract = storeContracts.find((c) => c._id === id);
+    if (contract) {
+      const { title, cropType, requiredQuantityTons, pricePerTon, deadline, terms } = req.body || {};
+      if (title) contract.title = title;
+      if (cropType) contract.cropType = cropType;
+      if (requiredQuantityTons) {
+        contract.requiredQuantityTons = parseFloat(requiredQuantityTons);
+        contract.totalValue = contract.requiredQuantityTons * (contract.pricePerTon || 1);
+      }
+      if (pricePerTon) {
+        contract.pricePerTon = parseFloat(pricePerTon);
+        contract.totalValue = (contract.requiredQuantityTons || 1) * contract.pricePerTon;
+      }
+      if (deadline) contract.deadline = deadline;
+      if (terms) contract.terms = terms;
+    }
+    return res.json({ success: true, contract: contract || storeContracts[0] });
+  }
+
+  // ACCEPT CONTRACT
+  if (reqPath.endsWith('/accept') && method === 'PATCH') {
+    const id = reqPath.split('/')[3];
+    const contract = storeContracts.find((c) => c._id === id);
+    if (contract) {
+      contract.status = 'accepted';
+      contract.farmer = currentUser.role === 'farmer' ? currentUser : demoFarmerUser;
+    }
+    return res.json({ success: true, contract: contract || storeContracts[0] });
+  }
+
+  // COMPLETE CONTRACT
+  if (reqPath.endsWith('/complete') && method === 'PATCH') {
+    const id = reqPath.split('/')[3];
+    const contract = storeContracts.find((c) => c._id === id);
+    if (contract) contract.status = 'completed';
+    return res.json({ success: true, contract: contract || storeContracts[0] });
+  }
+
+  // CANCEL CONTRACT
+  if (reqPath.endsWith('/cancel') && method === 'PATCH') {
+    const id = reqPath.split('/')[3];
+    const contract = storeContracts.find((c) => c._id === id);
+    if (contract) contract.status = 'cancelled';
+    return res.json({ success: true, contract: contract || storeContracts[0] });
+  }
+
+  // DECLINE CONTRACT
+  if (reqPath.endsWith('/decline') && method === 'PATCH') {
+    const id = reqPath.split('/')[3];
+    const contract = storeContracts.find((c) => c._id === id);
+    if (contract) contract.status = 'declined';
+    return res.json({ success: true, contract: contract || storeContracts[0] });
+  }
+
+  // DELETE CONTRACT
+  if (reqPath.startsWith('/api/contracts/') && method === 'DELETE') {
+    const id = reqPath.split('/')[3];
+    storeContracts = storeContracts.filter((c) => c._id !== id);
+    return res.json({ success: true, message: 'Contract deleted' });
+  }
+
+  // ─── CROP UPDATES CRUD (Log weekly manual updates) ─────────────────────────
   if (reqPath.startsWith('/api/updates/contract/') && method === 'GET') {
-    return res.json({
-      success: true,
-      updates: [
-        {
-          _id: 'u-1',
-          weekNumber: 2,
-          cropHealth: 'good',
-          weatherCondition: 'Moderate rain',
-          weatherImpact: 'positive',
-          estimatedYieldTons: 95,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          _id: 'u-2',
-          weekNumber: 4,
-          cropHealth: 'excellent',
-          weatherCondition: 'Sunny 24°C',
-          weatherImpact: 'positive',
-          estimatedYieldTons: 99,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    });
+    const contractId = reqPath.split('/')[4];
+    const updates = storeUpdates.filter((u) => u.contractId === contractId);
+    return res.json({ success: true, updates });
   }
 
-  // Ledger
+  // POST NEW CROP UPDATE
+  if (reqPath === '/api/updates' && method === 'POST') {
+    const {
+      contractId,
+      weekNumber,
+      cropHealth,
+      estimatedYieldTons,
+      weatherCondition,
+      weatherImpact,
+      notes,
+    } = req.body || {};
+
+    const newUpdate = {
+      _id: 'u-' + Date.now(),
+      contractId: contractId || 'c-101',
+      weekNumber: parseInt(weekNumber) || 1,
+      cropHealth: cropHealth || 'good',
+      estimatedYieldTons: parseFloat(estimatedYieldTons) || 0,
+      weatherCondition: weatherCondition || 'Clear skies',
+      weatherImpact: weatherImpact || 'neutral',
+      notes: notes || '',
+      createdAt: new Date().toISOString(),
+    };
+    storeUpdates.unshift(newUpdate);
+
+    // Automatically transition contract to 'active' cultivation
+    const contract = storeContracts.find((c) => c._id === contractId);
+    if (contract && contract.status === 'accepted') {
+      contract.status = 'active';
+    }
+
+    return res.status(201).json({ success: true, update: newUpdate });
+  }
+
+  // ─── LEDGER & PAYMENTS (Record manual disbursements) ───────────────────────
   if (reqPath === '/api/ledger' && method === 'GET') {
-    return res.json({
-      success: true,
-      payments: [
-        {
-          _id: 'led-1',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
-          amount: 500000,
-          type: 'advance',
-          paymentMode: 'bank_transfer',
-          transactionReference: 'NEFT-AXIS-9823412',
-          status: 'verified',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          _id: 'led-2',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
-          amount: 500000,
-          type: 'milestone',
-          paymentMode: 'upi',
-          transactionReference: 'UPI-RAZOR-4819283',
-          status: 'verified',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    });
+    return res.json({ success: true, payments: storeLedger });
   }
 
   if (reqPath.startsWith('/api/ledger/contract/') && method === 'GET') {
-    return res.json({
-      success: true,
-      entries: [
-        {
-          _id: 'led-1',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
-          amount: 500000,
-          type: 'advance',
-          paymentMode: 'bank_transfer',
-          transactionReference: 'NEFT-AXIS-9823412',
-          status: 'verified',
-          createdAt: new Date().toISOString(),
-        },
-        {
-          _id: 'led-2',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024-25' },
-          amount: 500000,
-          type: 'milestone',
-          paymentMode: 'upi',
-          transactionReference: 'UPI-RAZOR-4819283',
-          status: 'verified',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    });
+    const contractId = reqPath.split('/')[4];
+    const entries = storeLedger.filter((e) => e.contractId === contractId);
+    return res.json({ success: true, entries });
   }
 
   if (reqPath.startsWith('/api/ledger/summary/') && method === 'GET') {
+    const contractId = reqPath.split('/')[4];
+    const contract = storeContracts.find((c) => c._id === contractId);
+    const contractEntries = storeLedger.filter((e) => e.contractId === contractId);
+
+    const totalPaid = contractEntries.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const totalContractValue = contract?.totalValue || 2500000;
+    const remainingBalance = Math.max(0, totalContractValue - totalPaid);
+    const percentagePaid = totalContractValue > 0 ? Math.round((totalPaid / totalContractValue) * 100) : 0;
+
     return res.json({
       success: true,
       summary: {
-        totalPaid: 1000000,
-        totalContractValue: 2500000,
-        remainingBalance: 1500000,
-        percentagePaid: 40,
-        advancePaid: 500000,
-        milestonePaid: 500000,
-        finalPaid: 0,
-        entryCount: 2,
+        totalPaid,
+        totalContractValue,
+        remainingBalance,
+        percentagePaid,
+        advancePaid: contractEntries.filter((x) => x.type === 'advance').reduce((a, b) => a + (b.amount || 0), 0),
+        milestonePaid: contractEntries.filter((x) => x.type === 'milestone').reduce((a, b) => a + (b.amount || 0), 0),
+        finalPaid: contractEntries.filter((x) => x.type === 'final').reduce((a, b) => a + (b.amount || 0), 0),
+        entryCount: contractEntries.length,
       },
     });
   }
 
-  // Aadhaar
+  // RECORD PAYMENT (Manual input)
+  if (reqPath === '/api/ledger' && method === 'POST') {
+    const { contractId, amount, type, paymentMode, transactionReference, notes } = req.body || {};
+    const amt = parseFloat(amount) || 0;
+    const contract = storeContracts.find((c) => c._id === contractId);
+
+    const newPayment = {
+      _id: 'led-' + Date.now(),
+      contractId: contractId || 'c-101',
+      contract: { title: contract?.title || 'Contract Agreement' },
+      amount: amt,
+      type: type || 'advance',
+      paymentMode: paymentMode || 'bank_transfer',
+      transactionReference: transactionReference || 'REF-' + Math.floor(Math.random() * 899999 + 100000),
+      notes: notes || 'Manual payment disbursement',
+      status: 'verified',
+      createdAt: new Date().toISOString(),
+    };
+    storeLedger.unshift(newPayment);
+
+    // Update contract's amountPaid and paymentStatus
+    if (contract) {
+      contract.amountPaid = (contract.amountPaid || 0) + amt;
+      contract.paymentStatus = contract.amountPaid >= contract.totalValue ? 'paid' : 'partial';
+    }
+
+    return res.status(201).json({ success: true, entry: newPayment });
+  }
+
+  // ─── AADHAAR VERIFICATION ──────────────────────────────────────────────────
   if (reqPath === '/api/aadhaar/send-otp' && method === 'POST') {
     const { aadhaarNumber } = req.body || {};
+    const masked = `XXXX-XXXX-${(aadhaarNumber || '4892').slice(-4)}`;
     return res.json({
       success: true,
-      maskedNumber: `XXXX-XXXX-${(aadhaarNumber || '4892').slice(-4)}`,
+      maskedNumber: masked,
       demoOtp: '123456',
     });
   }
 
   if (reqPath === '/api/aadhaar/verify-otp' && method === 'POST') {
+    currentUser.aadhaar = {
+      verified: true,
+      maskedNumber: currentUser.aadhaar?.maskedNumber || 'XXXX-XXXX-4892',
+      verifiedAt: new Date().toISOString(),
+    };
     return res.json({
       success: true,
       message: 'Aadhaar successfully verified in sandbox mode!',
-      aadhaar: {
-        verified: true,
-        maskedNumber: 'XXXX-XXXX-4892',
-        verifiedAt: new Date().toISOString(),
-      },
-    });
-  }
-
-  // Modifications/Posts fallback
-  if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
-    return res.json({
-      success: true,
-      message: 'Operation accepted successfully!',
-      contract: demoContracts[0],
+      aadhaar: currentUser.aadhaar,
     });
   }
 

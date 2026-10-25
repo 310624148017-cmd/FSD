@@ -179,59 +179,80 @@ const AgribusinessContractsPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
 
+  const mergeWithLocal = (serverList = []) => {
+    try {
+      const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+      const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      if (hideDemo) {
+        return locals;
+      }
+      const ids = new Set(serverList.map((c) => c._id));
+      const extra = locals.filter((c) => !ids.has(c._id));
+      return [...extra, ...serverList];
+    } catch {
+      return serverList;
+    }
+  };
+
   const fetchContracts = async () => {
     setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
     try {
       const res = await contractService.getMyContracts(statusFilter ? { status: statusFilter } : {});
-      setContracts(res.data.contracts);
+      setContracts(mergeWithLocal(res.data.contracts || []));
     } catch {
-      // Demo fallback
-      setContracts([
-        {
-          _id: 'c-101',
-          title: 'Wheat (Sharbati A-Grade) 2024',
-          cropType: 'Wheat',
-          requiredQuantityTons: 100,
-          pricePerTon: 25000,
-          totalValue: 2500000,
-          deadline: '2025-04-15',
-          status: 'active',
-          farmer: { name: 'Rajesh Kumar' },
-        },
-        {
-          _id: 'c-102',
-          title: 'Basmati Rice Export Standard',
-          cropType: 'Basmati Rice',
-          requiredQuantityTons: 80,
-          pricePerTon: 40000,
-          totalValue: 3200000,
-          deadline: '2025-06-30',
-          status: 'accepted',
-          farmer: { name: 'Harpreet Singh' },
-        },
-        {
-          _id: 'c-103',
-          title: 'Organic Cotton Kharif Season',
-          cropType: 'Cotton',
-          requiredQuantityTons: 40,
-          pricePerTon: 45000,
-          totalValue: 1800000,
-          deadline: '2025-09-10',
-          status: 'open',
-          farmer: null,
-        },
-        {
-          _id: 'c-104',
-          title: 'Mustard Seeds Winter Harvest',
-          cropType: 'Mustard',
-          requiredQuantityTons: 50,
-          pricePerTon: 30000,
-          totalValue: 1500000,
-          deadline: '2025-03-20',
-          status: 'completed',
-          farmer: { name: 'Gurpreet Gill' },
-        },
-      ]);
+      if (hideDemo) {
+        setContracts(mergeWithLocal([]));
+      } else {
+        // Demo fallback
+        const base = [
+          {
+            _id: 'c-101',
+            title: 'Wheat (Sharbati A-Grade) 2024',
+            cropType: 'Wheat',
+            requiredQuantityTons: 100,
+            pricePerTon: 25000,
+            totalValue: 2500000,
+            deadline: '2025-04-15',
+            status: 'active',
+            farmer: { name: 'Rajesh Kumar' },
+          },
+          {
+            _id: 'c-102',
+            title: 'Basmati Rice Export Standard',
+            cropType: 'Basmati Rice',
+            requiredQuantityTons: 80,
+            pricePerTon: 40000,
+            totalValue: 3200000,
+            deadline: '2025-06-30',
+            status: 'accepted',
+            farmer: { name: 'Harpreet Singh' },
+          },
+          {
+            _id: 'c-103',
+            title: 'Organic Cotton Kharif Season',
+            cropType: 'Cotton',
+            requiredQuantityTons: 40,
+            pricePerTon: 45000,
+            totalValue: 1800000,
+            deadline: '2025-09-10',
+            status: 'open',
+            farmer: null,
+          },
+          {
+            _id: 'c-104',
+            title: 'Mustard Seeds Winter Harvest',
+            cropType: 'Mustard',
+            requiredQuantityTons: 50,
+            pricePerTon: 30000,
+            totalValue: 1500000,
+            deadline: '2025-03-20',
+            status: 'completed',
+            farmer: { name: 'Gurpreet Gill' },
+          },
+        ];
+        setContracts(mergeWithLocal(base));
+      }
     } finally {
       setLoading(false);
     }
@@ -239,6 +260,9 @@ const AgribusinessContractsPage = () => {
 
   useEffect(() => {
     fetchContracts();
+    const handleModeChange = () => fetchContracts();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, [statusFilter]);
 
   const filtered = contracts.filter((c) => {
@@ -348,51 +372,81 @@ export const OpenContractsPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
+  const mergeOpenWithLocal = (serverList = []) => {
+    try {
+      const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+      const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      const openLocals = locals.filter((c) => c.status === 'open');
+      if (hideDemo) {
+        return openLocals;
+      }
+      const ids = new Set(serverList.map((c) => c._id));
+      const extra = openLocals.filter((c) => !ids.has(c._id));
+      return [...extra, ...serverList];
+    } catch {
+      return serverList;
+    }
+  };
+
+  const loadOpenContracts = () => {
+    setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
     contractService
       .getOpenContracts()
       .then((r) => {
-        setContracts(r.data.contracts);
+        setContracts(mergeOpenWithLocal(r.data.contracts || []));
       })
       .catch(() => {
-        // Demo fallback
-        setContracts([
-          {
-            _id: 'c-open-1',
-            title: 'Organic Cotton Kharif Season',
-            cropType: 'Cotton',
-            requiredQuantityTons: 40,
-            pricePerTon: 45000,
-            totalValue: 1800000,
-            deadline: '2025-09-10',
-            status: 'open',
-            agribusiness: { profile: { companyName: 'ITC Agro Division', location: 'Telangana' } },
-          },
-          {
-            _id: 'c-open-2',
-            title: 'Soybean High Oil Content Variety',
-            cropType: 'Soybean',
-            requiredQuantityTons: 60,
-            pricePerTon: 36000,
-            totalValue: 2160000,
-            deadline: '2025-08-15',
-            status: 'open',
-            agribusiness: { profile: { companyName: 'Adani Wilmar Agri', location: 'Madhya Pradesh' } },
-          },
-          {
-            _id: 'c-open-3',
-            title: 'Maize Cattle Feed Quality Grade',
-            cropType: 'Maize',
-            requiredQuantityTons: 75,
-            pricePerTon: 22000,
-            totalValue: 1650000,
-            deadline: '2025-07-20',
-            status: 'open',
-            agribusiness: { profile: { companyName: 'Cargill India', location: 'Karnataka' } },
-          },
-        ]);
+        if (hideDemo) {
+          setContracts(mergeOpenWithLocal([]));
+        } else {
+          // Demo fallback
+          const base = [
+            {
+              _id: 'c-open-1',
+              title: 'Organic Cotton Kharif Season',
+              cropType: 'Cotton',
+              requiredQuantityTons: 40,
+              pricePerTon: 45000,
+              totalValue: 1800000,
+              deadline: '2025-09-10',
+              status: 'open',
+              agribusiness: { profile: { companyName: 'ITC Agro Division', location: 'Telangana' } },
+            },
+            {
+              _id: 'c-open-2',
+              title: 'Soybean High Oil Content Variety',
+              cropType: 'Soybean',
+              requiredQuantityTons: 60,
+              pricePerTon: 36000,
+              totalValue: 2160000,
+              deadline: '2025-08-15',
+              status: 'open',
+              agribusiness: { profile: { companyName: 'Adani Wilmar Agri', location: 'Madhya Pradesh' } },
+            },
+            {
+              _id: 'c-open-3',
+              title: 'Maize Cattle Feed Quality Grade',
+              cropType: 'Maize',
+              requiredQuantityTons: 75,
+              pricePerTon: 22000,
+              totalValue: 1650000,
+              deadline: '2025-07-20',
+              status: 'open',
+              agribusiness: { profile: { companyName: 'Cargill India', location: 'Karnataka' } },
+            },
+          ];
+          setContracts(mergeOpenWithLocal(base));
+        }
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadOpenContracts();
+    const handleModeChange = () => loadOpenContracts();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, []);
 
   const filtered = contracts.filter(
@@ -461,40 +515,71 @@ export const FarmerContractsPage = () => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
 
-  useEffect(() => {
+  const loadFarmerContracts = () => {
+    setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+    let locals = [];
+    try {
+      locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      if (statusFilter) {
+        locals = locals.filter((c) => c.status === statusFilter);
+      }
+    } catch {}
+
     contractService
       .getFarmerContracts(statusFilter ? { status: statusFilter } : {})
       .then((r) => {
-        setContracts(r.data.contracts);
+        const serverList = r.data.contracts || [];
+        if (hideDemo) {
+          setContracts(locals);
+        } else {
+          const ids = new Set(serverList.map((c) => c._id));
+          const extra = locals.filter((c) => !ids.has(c._id));
+          setContracts([...extra, ...serverList]);
+        }
       })
       .catch(() => {
-        // Demo fallback
-        setContracts([
-          {
-            _id: 'c-f-1',
-            title: 'Wheat (Sharbati A-Grade) 2024',
-            cropType: 'Wheat',
-            requiredQuantityTons: 100,
-            pricePerTon: 25000,
-            totalValue: 2500000,
-            deadline: '2025-04-15',
-            status: 'active',
-            agribusiness: { profile: { companyName: 'ITC Agro Division', location: 'Punjab' } },
-          },
-          {
-            _id: 'c-f-2',
-            title: 'Basmati Rice Export Standard',
-            cropType: 'Basmati Rice',
-            requiredQuantityTons: 80,
-            pricePerTon: 40000,
-            totalValue: 3200000,
-            deadline: '2025-06-30',
-            status: 'accepted',
-            agribusiness: { profile: { companyName: 'LT Foods Ltd', location: 'Haryana' } },
-          },
-        ]);
+        if (hideDemo) {
+          setContracts(locals);
+        } else {
+          // Demo fallback
+          const base = [
+            {
+              _id: 'c-f-1',
+              title: 'Wheat (Sharbati A-Grade) 2024',
+              cropType: 'Wheat',
+              requiredQuantityTons: 100,
+              pricePerTon: 25000,
+              totalValue: 2500000,
+              deadline: '2025-04-15',
+              status: 'active',
+              agribusiness: { profile: { companyName: 'ITC Agro Division', location: 'Punjab' } },
+            },
+            {
+              _id: 'c-f-2',
+              title: 'Basmati Rice Export Standard',
+              cropType: 'Basmati Rice',
+              requiredQuantityTons: 80,
+              pricePerTon: 40000,
+              totalValue: 3200000,
+              deadline: '2025-06-30',
+              status: 'accepted',
+              agribusiness: { profile: { companyName: 'LT Foods Ltd', location: 'Haryana' } },
+            },
+          ];
+          const ids = new Set(base.map((c) => c._id));
+          const extra = locals.filter((c) => !ids.has(c._id));
+          setContracts([...extra, ...base]);
+        }
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadFarmerContracts();
+    const handleModeChange = () => loadFarmerContracts();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, [statusFilter]);
 
   return (

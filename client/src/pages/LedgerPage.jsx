@@ -70,8 +70,32 @@ const LedgerPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
 
+  const [availableContracts, setAvailableContracts] = useState([]);
+  const [selectedContractId, setSelectedContractId] = useState(contractId || '');
+
   const fetchData = async () => {
     setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+    let localLedger = [];
+    try {
+      localLedger = JSON.parse(localStorage.getItem('cfm_local_ledger') || '[]');
+    } catch {}
+
+    // Load available contracts for selection
+    try {
+      const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      let serverContracts = [];
+      try {
+        const cRes = await contractService.getMyContracts();
+        serverContracts = cRes.data.contracts || [];
+      } catch {}
+      const combined = hideDemo ? locals : [...locals, ...serverContracts];
+      setAvailableContracts(combined);
+    } catch {}
+
+    let fetchedEntries = [];
+    let fetchedSummary = null;
+
     try {
       if (contractId) {
         const [eRes, sRes, cRes] = await Promise.all([
@@ -79,88 +103,106 @@ const LedgerPage = () => {
           ledgerService.getSummary(contractId),
           contractService.getById(contractId).catch(() => null),
         ]);
-        setEntries(eRes.data.entries || []);
-        setSummary(sRes.data.summary || null);
+        fetchedEntries = eRes.data.entries || [];
+        fetchedSummary = sRes.data.summary || null;
         if (cRes?.data?.contract) setContractDetails(cRes.data.contract);
       } else {
         const res = await ledgerService.getAll();
-        setEntries(res.data.payments || res.data.entries || []);
-        // Compute summary across all entries
-        const all = res.data.payments || res.data.entries || [];
-        const totalPaid = all.reduce((acc, curr) => acc + (curr.amount || 0), 0);
-        setSummary({
-          totalPaid,
-          entryCount: all.length,
-          advancePaid: all.filter((x) => x.type === 'advance').reduce((a, b) => a + (b.amount || 0), 0),
-          milestonePaid: all.filter((x) => x.type === 'milestone').reduce((a, b) => a + (b.amount || 0), 0),
-          finalPaid: all.filter((x) => x.type === 'final').reduce((a, b) => a + (b.amount || 0), 0),
-        });
+        fetchedEntries = res.data.payments || res.data.entries || [];
       }
     } catch {
-      // Demo fallback data
-      const demoEntries = [
-        {
-          _id: 'led-1',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
-          amount: 500000,
-          type: 'advance',
-          paymentMode: 'bank_transfer',
-          transactionReference: 'NEFT-AXIS-9823412',
-          notes: 'Contract signing advance 20%',
-          status: 'verified',
-          createdAt: '2024-10-15T10:00:00Z',
-        },
-        {
-          _id: 'led-2',
-          contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
-          amount: 500000,
-          type: 'milestone',
-          paymentMode: 'upi',
-          transactionReference: 'UPI-RAZOR-4819283',
-          notes: 'Milestone 2: Tillering and fertilizer audit passed',
-          status: 'verified',
-          createdAt: '2024-11-10T14:30:00Z',
-        },
-        {
-          _id: 'led-3',
-          contract: { title: 'Basmati Rice Export Standard' },
-          amount: 450000,
-          type: 'advance',
-          paymentMode: 'stripe',
-          transactionReference: 'STRIPE-CH-918231',
-          notes: 'Seed procurement advance',
-          status: 'verified',
-          createdAt: '2024-11-18T16:00:00Z',
-        },
-      ];
-
-      setEntries(demoEntries);
-      setSummary({
-        totalPaid: 1450000,
-        totalContractValue: contractId ? 2500000 : 7500000,
-        remainingBalance: contractId ? 1500000 : 6050000,
-        percentagePaid: contractId ? 40 : 19.3,
-        advancePaid: 950000,
-        milestonePaid: 500000,
-        finalPaid: 0,
-        entryCount: 3,
-      });
-
-      if (contractId) {
-        setContractDetails({
-          title: 'Wheat (Sharbati A-Grade) Procurement 2024',
-          cropType: 'Wheat',
-          totalValue: 2500000,
-          amountPaid: 1000000,
-        });
+      // Demo entries used only when hideDemo is false
+      if (!hideDemo) {
+        fetchedEntries = [
+          {
+            _id: 'led-1',
+            contractId: 'c-101',
+            contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
+            amount: 500000,
+            type: 'advance',
+            paymentMode: 'bank_transfer',
+            transactionReference: 'NEFT-AXIS-9823412',
+            notes: 'Contract signing advance 20%',
+            status: 'verified',
+            createdAt: '2024-10-15T10:00:00Z',
+          },
+          {
+            _id: 'led-2',
+            contractId: 'c-101',
+            contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
+            amount: 500000,
+            type: 'milestone',
+            paymentMode: 'upi',
+            transactionReference: 'UPI-RAZOR-4819283',
+            notes: 'Milestone 2: Tillering and fertilizer audit passed',
+            status: 'verified',
+            createdAt: '2024-11-10T14:30:00Z',
+          },
+          {
+            _id: 'led-3',
+            contractId: 'c-102',
+            contract: { title: 'Basmati Rice Export Standard' },
+            amount: 450000,
+            type: 'advance',
+            paymentMode: 'stripe',
+            transactionReference: 'STRIPE-CH-918231',
+            notes: 'Seed procurement advance',
+            status: 'verified',
+            createdAt: '2024-11-18T16:00:00Z',
+          },
+        ];
       }
-    } finally {
-      setLoading(false);
     }
+
+    // Filter local records by contract if applicable
+    const relevantLocals = contractId
+      ? localLedger.filter((l) => l.contractId === contractId)
+      : localLedger;
+
+    // Merge manual local records with server/demo records
+    const merged = hideDemo
+      ? relevantLocals
+      : [...relevantLocals, ...fetchedEntries.filter((f) => !relevantLocals.some((l) => l._id === f._id))];
+
+    setEntries(merged);
+
+    // Compute dynamic summary metrics from all active entries
+    const totalPaid = merged.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const advancePaid = merged.filter((x) => x.type === 'advance').reduce((a, b) => a + (b.amount || 0), 0);
+    const milestonePaid = merged.filter((x) => x.type === 'milestone').reduce((a, b) => a + (b.amount || 0), 0);
+    const finalPaid = merged.filter((x) => x.type === 'final').reduce((a, b) => a + (b.amount || 0), 0);
+
+    const totalContractValue = contractDetails?.totalValue || (contractId ? 2500000 : 7500000);
+    const remainingBalance = Math.max(0, totalContractValue - totalPaid);
+    const percentagePaid = totalContractValue > 0 ? Math.min(100, Math.round((totalPaid / totalContractValue) * 100)) : 0;
+
+    setSummary({
+      totalPaid,
+      totalContractValue,
+      remainingBalance,
+      percentagePaid,
+      advancePaid,
+      milestonePaid,
+      finalPaid,
+      entryCount: merged.length,
+    });
+
+    if (contractId && !contractDetails) {
+      try {
+        const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+        const found = locals.find((c) => c._id === contractId);
+        if (found) setContractDetails(found);
+      } catch {}
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchData();
+
+    const handleModeChange = () => fetchData();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
 
     // Handle stripe redirect back
     const payment = searchParams.get('payment');
@@ -176,23 +218,74 @@ const LedgerPage = () => {
           setFormError('Online payment callback received.');
         });
     }
+
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, [contractId]);
 
   const handleRecord = async (e) => {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
+
+    const targetContractId = contractId || selectedContractId;
+    const amt = parseFloat(form.amount) || 0;
+
+    // Find contract title
+    let targetTitle = contractDetails?.title;
+    if (!targetTitle && targetContractId) {
+      const found = availableContracts.find((c) => c._id === targetContractId);
+      if (found) targetTitle = found.title;
+    }
+
+    const newEntry = {
+      _id: 'led-local-' + Date.now(),
+      contractId: targetContractId || null,
+      contract: { title: targetTitle || 'Contract Agreement' },
+      amount: amt,
+      type: form.type,
+      paymentMode: form.paymentMode,
+      transactionReference: form.transactionReference || 'REF-' + Math.floor(Math.random() * 899999 + 100000),
+      notes: form.notes || 'Manual payment disbursement',
+      status: 'verified',
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save into localStorage cfm_local_ledger immediately
+    try {
+      const locals = JSON.parse(localStorage.getItem('cfm_local_ledger') || '[]');
+      locals.unshift(newEntry);
+      localStorage.setItem('cfm_local_ledger', JSON.stringify(locals));
+
+      // Also update contract's amountPaid in cfm_local_contracts
+      if (targetContractId) {
+        const contracts = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+        const idx = contracts.findIndex((c) => c._id === targetContractId);
+        if (idx !== -1) {
+          contracts[idx].amountPaid = (contracts[idx].amountPaid || 0) + amt;
+          if (contracts[idx].totalValue && contracts[idx].amountPaid >= contracts[idx].totalValue) {
+            contracts[idx].paymentStatus = 'paid';
+          } else if (contracts[idx].amountPaid > 0) {
+            contracts[idx].paymentStatus = 'partial';
+          }
+          localStorage.setItem('cfm_local_contracts', JSON.stringify(contracts));
+        }
+      }
+    } catch {}
+
     try {
       if (form.paymentMode === 'stripe') {
-        const res = await paymentService.createCheckoutSession({ contractId, ...form });
+        const res = await paymentService.createCheckoutSession({ contractId: targetContractId, ...form });
         if (res.data?.url) {
           window.location.href = res.data.url;
           return;
         }
       }
 
-      await ledgerService.record({ contractId, ...form });
-      setSuccess('Payment successfully logged to digital ledger!');
+      await ledgerService.record({ contractId: targetContractId, ...form });
+    } catch (err) {
+      // Local fallback already saved in localStorage
+    } finally {
+      setSuccess('Payment recorded and updated in digital ledger!');
       setShowForm(false);
       setForm({
         amount: '',
@@ -201,25 +294,8 @@ const LedgerPage = () => {
         paymentMode: 'bank_transfer',
         transactionReference: '',
       });
-      fetchData();
-    } catch (err) {
-      // Optimistic demo addition
-      const newEntry = {
-        _id: 'led-new-' + Date.now(),
-        contract: { title: contractDetails?.title || 'Contract' },
-        amount: parseFloat(form.amount) || 100000,
-        type: form.type,
-        paymentMode: form.paymentMode,
-        transactionReference: form.transactionReference || 'REF-' + Math.floor(Math.random() * 899999 + 100000),
-        notes: form.notes || 'Disbursement record',
-        status: 'verified',
-        createdAt: new Date().toISOString(),
-      };
-      setEntries([newEntry, ...entries]);
-      setSuccess('Payment recorded successfully in ledger!');
-      setShowForm(false);
-    } finally {
       setSubmitting(false);
+      fetchData();
       setTimeout(() => setSuccess(''), 5000);
     }
   };
@@ -288,15 +364,13 @@ const LedgerPage = () => {
           </div>
 
           {/* Record payment CTA */}
-          {isAgri && contractId && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="btn-primary"
-              style={{ padding: '10px 22px' }}
-            >
-              <PlusCircle size={17} /> {showForm ? 'Close Form' : 'Record New Payment'}
-            </button>
-          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="btn-primary"
+            style={{ padding: '10px 22px' }}
+          >
+            <PlusCircle size={17} /> {showForm ? 'Close Form' : 'Record New Payment'}
+          </button>
         </div>
       </div>
 
@@ -320,6 +394,26 @@ const LedgerPage = () => {
           </p>
 
           <form onSubmit={handleRecord} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* If accessed globally, allow choosing which contract this payment is for */}
+            {!contractId && (
+              <div className="form-group">
+                <label className="form-label">Associated Contract Agreement *</label>
+                <select
+                  value={selectedContractId}
+                  onChange={(e) => setSelectedContractId(e.target.value)}
+                  className="form-select"
+                  required
+                >
+                  <option value="">-- Select Contract Agreement --</option>
+                  {availableContracts.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.title} ({c.cropType}) · ₹{(c.totalValue || 0).toLocaleString('en-IN')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
               <div className="form-group">
                 <label className="form-label">Disbursement Amount (₹) *</label>

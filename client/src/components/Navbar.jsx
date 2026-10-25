@@ -14,14 +14,27 @@ import {
   ShieldCheck, 
   AlertTriangle,
   Building2,
-  Compass
+  Compass,
+  Database
 } from 'lucide-react';
+import { DataModeModal } from './DataModeModal';
+import { useEffect } from 'react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [dataModalOpen, setDataModalOpen] = useState(false);
+  const [hideDemo, setHideDemo] = useState(() => localStorage.getItem('cfm_hide_demo_data') === 'true');
+
+  useEffect(() => {
+    const handleModeChange = () => {
+      setHideDemo(localStorage.getItem('cfm_hide_demo_data') === 'true');
+    };
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -169,7 +182,31 @@ const Navbar = () => {
 
         {/* Right Actions */}
         {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Data Mode Config Pill */}
+            <button
+              type="button"
+              onClick={() => setDataModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 11px',
+                borderRadius: 20,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: hideDemo ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.12)',
+                color: hideDemo ? '#34d399' : '#38bdf8',
+                border: hideDemo ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              title="Configure Manual vs Demo Data and Database Settings"
+            >
+              <Database size={13} />
+              <span>{hideDemo ? 'Manual Mode' : 'Data: Demo+Manual'}</span>
+            </button>
+
             {/* Aadhaar Verification Pill */}
             <Link
               to="/verify-aadhaar"
@@ -374,6 +411,9 @@ const Navbar = () => {
           </div>
         </div>
       )}
+
+      {/* Data Mode & Cloud Database Management Modal */}
+      <DataModeModal isOpen={dataModalOpen} onClose={() => setDataModalOpen(false)} />
     </nav>
   );
 };

@@ -46,16 +46,34 @@ const ContractDetailPage = () => {
   const [error, setError] = useState('');
 
   const fetchAll = async () => {
+    let fetchedContract = null;
+    let fetchedUpdates = [];
     try {
       const [cRes, uRes] = await Promise.all([
         contractService.getById(id),
         updateService.getByContract(id),
       ]);
-      setContract(cRes.data.contract);
-      setUpdates(uRes.data.updates || []);
-    } catch {
-      // Demo fallback data for preview
-      setContract({
+      fetchedContract = cRes.data?.contract;
+      fetchedUpdates = uRes.data?.updates || [];
+    } catch {}
+
+    // Check localStorage for manually added contracts or updates
+    try {
+      const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      const localFound = locals.find((c) => c._id === id);
+      if (localFound) fetchedContract = localFound;
+
+      const localUpdates = JSON.parse(localStorage.getItem('cfm_local_updates') || '[]');
+      const contractLocalUpdates = localUpdates.filter((u) => u.contractId === id);
+      if (contractLocalUpdates.length > 0) {
+        fetchedUpdates = [...contractLocalUpdates, ...fetchedUpdates];
+      }
+    } catch {}
+
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+
+    if (!fetchedContract && !hideDemo) {
+      fetchedContract = {
         _id: id,
         title: 'Wheat (Sharbati A-Grade) Procurement Agreement 2024-25',
         cropType: 'Wheat',
@@ -67,7 +85,7 @@ const ContractDetailPage = () => {
         status: 'active',
         createdAt: '2024-10-10T10:00:00.000Z',
         deadline: '2025-04-15T00:00:00.000Z',
-        terms: 'Must meet 98% purity standard, moisture level below 12%. Delivery at Ludhiana grain terminal. Advance payment released upon mutual signing.',
+        terms: 'Must meet 98% purity standard, moisture level below 12%. Delivery at Ludhiana grain terminal.',
         agribusiness: {
           _id: 'agri-101',
           name: 'ITC Agri Business Ltd',
@@ -81,69 +99,77 @@ const ContractDetailPage = () => {
           profile: { location: 'Ludhiana District, Punjab', phone: '+91 98765 43210' },
           aadhaar: { verified: true, maskedNumber: 'XXXX-XXXX-4892' },
         },
-      });
+      };
 
-      setUpdates([
-        {
-          _id: 'u-1',
-          weekNumber: 2,
-          cropHealth: 'good',
-          weatherCondition: 'Moderate rain, good germination',
-          weatherImpact: 'positive',
-          estimatedYieldTons: 95,
-          notes: 'Germination completed on 95% of sown acreage. Fertilizers applied on schedule.',
-          createdAt: '2024-10-24T12:00:00.000Z',
-        },
-        {
-          _id: 'u-2',
-          weekNumber: 4,
-          cropHealth: 'excellent',
-          weatherCondition: 'Sunny, 24°C',
-          weatherImpact: 'positive',
-          estimatedYieldTons: 98,
-          notes: 'Tillering stage vigorous. No pest activity observed.',
-          createdAt: '2024-11-07T12:00:00.000Z',
-        },
-        {
-          _id: 'u-3',
-          weekNumber: 6,
-          cropHealth: 'excellent',
-          weatherCondition: 'Clear skies, mild winter',
-          weatherImpact: 'positive',
-          estimatedYieldTons: 102,
-          notes: 'Irrigation cycle 2 completed. Projected harvest on track to exceed contract floor.',
-          createdAt: '2024-11-21T12:00:00.000Z',
-        },
-      ]);
-    } finally {
-      setLoading(false);
+      if (fetchedUpdates.length === 0) {
+        fetchedUpdates = [
+          {
+            _id: 'u-1',
+            weekNumber: 2,
+            cropHealth: 'good',
+            weatherCondition: 'Moderate rain, good germination',
+            weatherImpact: 'positive',
+            estimatedYieldTons: 95,
+            notes: 'Germination completed on 95% of sown acreage. Fertilizers applied on schedule.',
+            createdAt: '2024-10-24T12:00:00.000Z',
+          },
+          {
+            _id: 'u-2',
+            weekNumber: 4,
+            cropHealth: 'excellent',
+            weatherCondition: 'Sunny, 24°C',
+            weatherImpact: 'positive',
+            estimatedYieldTons: 98,
+            notes: 'Tillering stage vigorous. No pest activity observed.',
+            createdAt: '2024-11-07T12:00:00.000Z',
+          },
+        ];
+      }
     }
+
+    setContract(fetchedContract);
+    setUpdates(fetchedUpdates);
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchAll();
+    const handleModeChange = () => fetchAll();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, [id]);
 
   const handleAction = async (action) => {
     setActionLoading(action);
     setError('');
+    let updated = null;
     try {
       const res = await contractService[action](id);
-      setContract(res.data.contract);
+      updated = res.data?.contract;
     } catch (err) {
-      // Local optimistic update for demo testing
       if (action === 'accept') {
-        setContract((prev) => ({ ...prev, status: 'accepted', farmer: user }));
+        updated = { ...contract, status: 'accepted', farmer: user };
       } else if (action === 'complete') {
-        setContract((prev) => ({ ...prev, status: 'completed' }));
+        updated = { ...contract, status: 'completed' };
       } else if (action === 'cancel') {
-        setContract((prev) => ({ ...prev, status: 'cancelled' }));
-      } else {
-        setError(err.response?.data?.message || `Failed to ${action} contract.`);
+        updated = { ...contract, status: 'cancelled' };
+      } else if (action === 'decline') {
+        updated = { ...contract, status: 'declined' };
       }
-    } finally {
-      setActionLoading('');
     }
+
+    if (updated) {
+      setContract(updated);
+      try {
+        const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+        const idx = locals.findIndex((c) => c._id === id);
+        if (idx !== -1) {
+          locals[idx] = updated;
+          localStorage.setItem('cfm_local_contracts', JSON.stringify(locals));
+        }
+      } catch {}
+    }
+    setActionLoading('');
   };
 
   const handleDelete = async () => {
@@ -153,6 +179,12 @@ const ContractDetailPage = () => {
     } catch {
       // Optimistic delete
     }
+    try {
+      const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      const filtered = locals.filter((c) => c._id !== id);
+      localStorage.setItem('cfm_local_contracts', JSON.stringify(filtered));
+      window.dispatchEvent(new Event('cfm_datamode_changed'));
+    } catch {}
     navigate('/contracts');
   };
 

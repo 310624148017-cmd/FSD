@@ -31,15 +31,33 @@ const ContractFormPage = ({ isEdit = false }) => {
     if (isEdit && id) {
       contractService.getById(id).then((res) => {
         const c = res.data.contract;
-        setForm({
-          title: c.title || '',
-          cropType: c.cropType || '',
-          requiredQuantityTons: c.requiredQuantityTons || '',
-          pricePerTon: c.pricePerTon || '',
-          deadline: c.deadline ? c.deadline.split('T')[0] : '',
-          terms: c.terms || '',
-        });
-      }).catch(() => {});
+        if (c) {
+          setForm({
+            title: c.title || '',
+            cropType: c.cropType || '',
+            requiredQuantityTons: c.requiredQuantityTons || '',
+            pricePerTon: c.pricePerTon || '',
+            deadline: c.deadline ? c.deadline.split('T')[0] : '',
+            terms: c.terms || '',
+          });
+        }
+      }).catch(() => {
+        // Check localStorage
+        try {
+          const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+          const found = locals.find((c) => c._id === id);
+          if (found) {
+            setForm({
+              title: found.title || '',
+              cropType: found.cropType || '',
+              requiredQuantityTons: found.requiredQuantityTons || '',
+              pricePerTon: found.pricePerTon || '',
+              deadline: found.deadline ? found.deadline.split('T')[0] : '',
+              terms: found.terms || '',
+            });
+          }
+        } catch {}
+      });
     }
   }, [isEdit, id]);
 
@@ -53,18 +71,65 @@ const ContractFormPage = ({ isEdit = false }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    const contractData = {
+      ...form,
+      requiredQuantityTons: qty,
+      pricePerTon: price,
+      totalValue: qty * price,
+      deadline: form.deadline || new Date(Date.now() + 90 * 86400000).toISOString(),
+    };
+
     try {
       if (isEdit) {
-        await contractService.update(id, form);
+        await contractService.update(id, contractData);
+        // Sync local storage
+        try {
+          const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+          const idx = locals.findIndex((c) => c._id === id);
+          if (idx !== -1) {
+            locals[idx] = { ...locals[idx], ...contractData };
+            localStorage.setItem('cfm_local_contracts', JSON.stringify(locals));
+          }
+        } catch {}
         navigate(`/contracts/${id}`);
       } else {
-        const res = await contractService.create(form);
-        const newId = res.data.contract?._id || 'new';
-        navigate(`/contracts/${newId}`);
+        const res = await contractService.create(contractData);
+        const created = res.data?.contract || {
+          _id: 'c-' + Date.now(),
+          ...contractData,
+          status: 'open',
+          amountPaid: 0,
+          paymentStatus: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+
+        // Persist to local client storage as well
+        try {
+          const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+          locals.unshift(created);
+          localStorage.setItem('cfm_local_contracts', JSON.stringify(locals));
+        } catch {}
+
+        navigate(`/contracts/${created._id}`);
       }
     } catch (err) {
-      // Local demo fallback navigation if backend is offline
-      navigate('/contracts');
+      // Local fallback creation
+      const localId = 'c-' + Date.now();
+      const fallbackContract = {
+        _id: localId,
+        ...contractData,
+        status: 'open',
+        amountPaid: 0,
+        paymentStatus: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      try {
+        const locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+        locals.unshift(fallbackContract);
+        localStorage.setItem('cfm_local_contracts', JSON.stringify(locals));
+      } catch {}
+      navigate(`/contracts/${localId}`);
     } finally {
       setLoading(false);
     }
@@ -128,7 +193,7 @@ const ContractFormPage = ({ isEdit = false }) => {
                   value={form.cropType}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="e.g. Wheat, Basmati Rice, Cotton"
+                  placeholder="e.g. Wheat, Basmati Rice, Cotton, Sugarcane"
                   required
                 />
               </div>
@@ -208,7 +273,7 @@ const ContractFormPage = ({ isEdit = false }) => {
                 style={{ padding: '12px 24px', flex: 1 }}
               >
                 {loading
-                  ? 'Saving...'
+                  ? 'Saving Contract...'
                   : isEdit
                   ? 'Save Contract Amendments'
                   : 'Publish Contract Offer →'}

@@ -79,69 +79,118 @@ const AgribusinessDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+
+    let locals = [];
+    let localLedger = [];
+    let localUpdates = [];
+    try {
+      locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      localLedger = JSON.parse(localStorage.getItem('cfm_local_ledger') || '[]');
+      localUpdates = JSON.parse(localStorage.getItem('cfm_local_updates') || '[]');
+    } catch {}
+
     dashboardService
       .agribusiness()
       .then((r) => {
-        setData(r.data.dashboard);
+        const serverDash = r.data.dashboard || {};
+        const serverContracts = serverDash.recentContracts || [];
+        const mergedContracts = hideDemo
+          ? locals
+          : [...locals, ...serverContracts.filter((c) => !locals.some((l) => l._id === c._id))];
+
+        const totalPaid = hideDemo
+          ? localLedger.reduce((a, b) => a + (b.amount || 0), 0)
+          : (serverDash.stats?.totalPaid || 0) + localLedger.reduce((a, b) => a + (b.amount || 0), 0);
+
+        setData({
+          stats: {
+            totalContracts: mergedContracts.length,
+            activeContracts: mergedContracts.filter((c) => c.status === 'active').length,
+            completedContracts: mergedContracts.filter((c) => c.status === 'completed').length,
+            openContracts: mergedContracts.filter((c) => c.status === 'open').length,
+            farmerCount: new Set(mergedContracts.map((c) => c.farmer?.name).filter(Boolean)).size || (hideDemo ? 0 : 4),
+            totalPaid,
+          },
+          recentContracts: mergedContracts,
+          recentUpdates: hideDemo ? localUpdates : [...localUpdates, ...(serverDash.recentUpdates || [])],
+        });
         setLoading(false);
       })
       .catch(() => {
-        // Fallback demo data for Vercel preview
+        // Fallback demo data
+        const demoContracts = [
+          {
+            _id: 'demo-c1',
+            title: 'Wheat (Sharbati A-Grade) 2024',
+            cropType: 'Wheat',
+            requiredQuantityTons: 100,
+            farmer: { name: 'Rajesh Kumar' },
+            status: 'active',
+            totalValue: 2500000,
+            amountPaid: 1000000,
+          },
+          {
+            _id: 'demo-c2',
+            title: 'Basmati Rice Export Standard',
+            cropType: 'Basmati Rice',
+            requiredQuantityTons: 80,
+            farmer: { name: 'Harpreet Singh' },
+            status: 'accepted',
+            totalValue: 3200000,
+            amountPaid: 450000,
+          },
+          {
+            _id: 'demo-c3',
+            title: 'Organic Cotton Kharif Season',
+            cropType: 'Cotton',
+            requiredQuantityTons: 40,
+            farmer: null,
+            status: 'open',
+            totalValue: 1800000,
+            amountPaid: 0,
+          },
+          {
+            _id: 'demo-c4',
+            title: 'Mustard Seeds Winter Harvest',
+            cropType: 'Mustard',
+            requiredQuantityTons: 50,
+            farmer: { name: 'Gurpreet Gill' },
+            status: 'completed',
+            totalValue: 1500000,
+            amountPaid: 1500000,
+          },
+        ];
+
+        const mergedContracts = hideDemo
+          ? locals
+          : [...locals, ...demoContracts.filter((c) => !locals.some((l) => l._id === c._id))];
+
+        const totalPaid = (hideDemo ? 0 : 1450000) + localLedger.reduce((a, b) => a + (b.amount || 0), 0);
+
         setData({
           stats: {
-            totalContracts: 6,
-            activeContracts: 3,
-            completedContracts: 2,
-            openContracts: 1,
-            farmerCount: 4,
-            totalPaid: 1450000,
+            totalContracts: mergedContracts.length,
+            activeContracts: mergedContracts.filter((c) => c.status === 'active').length,
+            completedContracts: mergedContracts.filter((c) => c.status === 'completed').length,
+            openContracts: mergedContracts.filter((c) => c.status === 'open').length,
+            farmerCount: new Set(mergedContracts.map((c) => c.farmer?.name).filter(Boolean)).size || (hideDemo ? 0 : 4),
+            totalPaid,
           },
-          recentContracts: [
-            {
-              _id: 'demo-c1',
-              title: 'Wheat (Sharbati A-Grade) 2024',
-              cropType: 'Wheat',
-              requiredQuantityTons: 100,
-              farmer: { name: 'Rajesh Kumar' },
-              status: 'active',
-              totalValue: 2500000,
-              amountPaid: 1000000,
-            },
-            {
-              _id: 'demo-c2',
-              title: 'Basmati Rice Export Standard',
-              cropType: 'Basmati Rice',
-              requiredQuantityTons: 80,
-              farmer: { name: 'Harpreet Singh' },
-              status: 'accepted',
-              totalValue: 3200000,
-              amountPaid: 450000,
-            },
-            {
-              _id: 'demo-c3',
-              title: 'Organic Cotton Kharif Season',
-              cropType: 'Cotton',
-              requiredQuantityTons: 40,
-              farmer: null,
-              status: 'open',
-              totalValue: 1800000,
-              amountPaid: 0,
-            },
-            {
-              _id: 'demo-c4',
-              title: 'Mustard Seeds Winter Harvest',
-              cropType: 'Mustard',
-              requiredQuantityTons: 50,
-              farmer: { name: 'Gurpreet Gill' },
-              status: 'completed',
-              totalValue: 1500000,
-              amountPaid: 1500000,
-            },
-          ],
+          recentContracts: mergedContracts,
+          recentUpdates: hideDemo ? localUpdates : localUpdates,
         });
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadData();
+    const handleModeChange = () => loadData();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, []);
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /></div>;
@@ -342,57 +391,95 @@ const FarmerDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadFarmerData = () => {
+    setLoading(true);
+    const hideDemo = localStorage.getItem('cfm_hide_demo_data') === 'true';
+
+    let locals = [];
+    let localUpdates = [];
+    try {
+      locals = JSON.parse(localStorage.getItem('cfm_local_contracts') || '[]');
+      localUpdates = JSON.parse(localStorage.getItem('cfm_local_updates') || '[]');
+    } catch {}
+
     dashboardService
       .farmer()
       .then((r) => {
-        setData(r.data.dashboard);
+        const serverDash = r.data.dashboard || {};
+        const mergedUpdates = hideDemo ? localUpdates : [...localUpdates, ...(serverDash.recentUpdates || [])];
+        const serverPending = serverDash.pendingPayments || [];
+        const mergedPending = hideDemo ? locals : [...locals, ...serverPending.filter((p) => !locals.some((l) => l._id === p._id))];
+
+        setData({
+          stats: {
+            totalContracts: hideDemo ? locals.length : (serverDash.stats?.totalContracts || 4) + locals.length,
+            activeContracts: hideDemo ? locals.filter((c) => c.status === 'active').length : (serverDash.stats?.activeContracts || 2),
+            completedContracts: hideDemo ? locals.filter((c) => c.status === 'completed').length : (serverDash.stats?.completedContracts || 1),
+            openContracts: hideDemo ? locals.filter((c) => c.status === 'open').length : (serverDash.stats?.openContracts || 8),
+          },
+          recentUpdates: mergedUpdates,
+          pendingPayments: mergedPending,
+        });
         setLoading(false);
       })
       .catch(() => {
-        // Fallback demo data for Vercel preview
+        // Fallback demo data
+        const demoUpdates = [
+          {
+            _id: 'demo-u1',
+            contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
+            weekNumber: 6,
+            cropHealth: 'excellent',
+            weatherCondition: 'Mild Sunny, Optimal Moisture',
+            estimatedYieldTons: 98,
+          },
+          {
+            _id: 'demo-u2',
+            contract: { title: 'Basmati Rice Export Standard' },
+            weekNumber: 3,
+            cropHealth: 'good',
+            weatherCondition: 'Clear skies',
+            estimatedYieldTons: 82,
+          },
+        ];
+
+        const demoPending = [
+          {
+            _id: 'demo-c1',
+            title: 'Wheat (Sharbati A-Grade) 2024',
+            amountPaid: 1000000,
+            totalValue: 2500000,
+          },
+          {
+            _id: 'demo-c2',
+            title: 'Basmati Rice Export Standard',
+            amountPaid: 450000,
+            totalValue: 3200000,
+          },
+        ];
+
+        const mergedUpdates = hideDemo ? localUpdates : [...localUpdates, ...demoUpdates];
+        const mergedPending = hideDemo ? locals : [...locals, ...demoPending];
+
         setData({
           stats: {
-            totalContracts: 4,
-            activeContracts: 2,
-            completedContracts: 1,
-            openContracts: 8,
+            totalContracts: hideDemo ? locals.length : 4 + locals.length,
+            activeContracts: hideDemo ? locals.filter((c) => c.status === 'active').length : 2,
+            completedContracts: hideDemo ? locals.filter((c) => c.status === 'completed').length : 1,
+            openContracts: hideDemo ? locals.filter((c) => c.status === 'open').length : 8,
           },
-          recentUpdates: [
-            {
-              _id: 'demo-u1',
-              contract: { title: 'Wheat (Sharbati A-Grade) 2024' },
-              weekNumber: 6,
-              cropHealth: 'excellent',
-              weatherCondition: 'Mild Sunny, Optimal Moisture',
-              estimatedYieldTons: 98,
-            },
-            {
-              _id: 'demo-u2',
-              contract: { title: 'Basmati Rice Export Standard' },
-              weekNumber: 3,
-              cropHealth: 'good',
-              weatherCondition: 'Clear skies',
-              estimatedYieldTons: 82,
-            },
-          ],
-          pendingPayments: [
-            {
-              _id: 'demo-c1',
-              title: 'Wheat (Sharbati A-Grade) 2024',
-              amountPaid: 1000000,
-              totalValue: 2500000,
-            },
-            {
-              _id: 'demo-c2',
-              title: 'Basmati Rice Export Standard',
-              amountPaid: 450000,
-              totalValue: 3200000,
-            },
-          ],
+          recentUpdates: mergedUpdates,
+          pendingPayments: mergedPending,
         });
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadFarmerData();
+    const handleModeChange = () => loadFarmerData();
+    window.addEventListener('cfm_datamode_changed', handleModeChange);
+    return () => window.removeEventListener('cfm_datamode_changed', handleModeChange);
   }, []);
 
   if (loading) return <div className="loading-spinner"><div className="spinner" /></div>;
